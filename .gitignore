@@ -1,0 +1,10 @@
+.vscode
+API
+Dependency_files
+Dynamic_libraries
+Executable_files
+Object_files
+Temp
+Common_shell_files
+Temp_sym_links
+Temp_directories
