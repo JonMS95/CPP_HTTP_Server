@@ -16,21 +16,21 @@
 
 /************ Port settings ************/
 
-#define PORT_OPT_CHAR       'r'
-#define PORT_OPT_LONG       "Port_range"
-#define PORT_OPT_DETAIL     "Range of acceptable port numbers."
-#define PORT_MIN_VALUE      49152
-#define PORT_MAX_VALUE      65535
-#define PORT_DEFAULT_VALUE  50000
+#define PORT_OPT_CHAR                       'r'
+#define PORT_OPT_LONG                       "Port_range"
+#define PORT_OPT_DETAIL                     "Range of acceptable port numbers."
+#define PORT_MIN_VALUE                      49152
+#define PORT_MAX_VALUE                      65535
+#define PORT_DEFAULT_VALUE                  50000
 
 /********* Connection settings *********/
 
-#define CLIENTS_OPT_CHAR        'm'
-#define CLIENTS_OPT_LONG        "Clients"
-#define CLIENTS_OPT_DETAIL      "Maximum number of clients."
-#define CLIENTS_MIN_VALUE       1
-#define CLIENTS_MAX_VALUE       3
-#define CLIENTS_DEFAULT_VALUE   1
+#define CLIENTS_OPT_CHAR                    'm'
+#define CLIENTS_OPT_LONG                    "Clients"
+#define CLIENTS_OPT_DETAIL                  "Maximum number of clients."
+#define CLIENTS_MIN_VALUE                   1
+#define CLIENTS_MAX_VALUE                   3
+#define CLIENTS_DEFAULT_VALUE               1
 
 /********* Enable concurrency *********/
 
@@ -39,37 +39,45 @@
 #define SIMULTANEOUS_CONNS_DETAIL           "Enable concurrency."
 #define SIMULTANEOUS_CONNS_DEFAULT_VALUE    false
 
+/********* Non-blocking socket ********/
+
+#define NON_BLOCKING_CHAR                   'n'
+#define NON_BLOCKING_LONG                   "NonBlocking"
+#define NON_BLOCKING_DETAIL                 "Non blocking socket."
+#define NON_BLOCKING_DEFAULT_VALUE          true
+
 /********* Secure connection *********/
 
-#define SECURE_CONN_CHAR            's'
-#define SECURE_CONN_LONG            "Secure"
-#define SECURE_CONN_DETAIL          "Secure connection."
-#define SECURE_CONN_DEFAULT_VALUE   false
+#define SECURE_CONN_CHAR                    's'
+#define SECURE_CONN_LONG                    "Secure"
+#define SECURE_CONN_DETAIL                  "Secure connection."
+#define SECURE_CONN_DEFAULT_VALUE           false
 
 /********* Certificate and private key path *********/
 
 /************ Server certificate ************/
 
-#define CERT_OPT_CHAR       'c'
-#define CERT_OPT_LONG       "Certificate"
-#define CERT_OPT_DETAIL     "Server certificate."
-#define CERT_DEFAULT_VALUE  "~/Desktop/scripts/certificate_test/certificate.crt"
+#define CERT_OPT_CHAR                       'c'
+#define CERT_OPT_LONG                       "Certificate"
+#define CERT_OPT_DETAIL                     "Server certificate."
+#define CERT_DEFAULT_VALUE                  "~/Desktop/scripts/certificate_test/certificate.crt"
 
 /************ Server private key ************/
 
-#define PKEY_OPT_CHAR       'k'
-#define PKEY_OPT_LONG       "Key"
-#define PKEY_OPT_DETAIL     "Server private key."
-#define PKEY_DEFAULT_VALUE  "~/Desktop/scripts/certificate_test/private.key"
+#define PKEY_OPT_CHAR                       'k'
+#define PKEY_OPT_LONG                       "Key"
+#define PKEY_OPT_DETAIL                     "Server private key."
+#define PKEY_DEFAULT_VALUE                  "~/Desktop/scripts/certificate_test/private.key"
 
 /***************************************/
 
 /************ Web resources path ************/
 
-#define RESOURCES_OPT_CHAR      'e'
-#define RESOURCES_OPT_LONG      "Resources"
-#define RESOURCES_OPT_DETAIL    "Path to web resources"
-#define RESOURCES_DEFAULT_VALUE "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Sample_webpage"
+#define RESOURCES_OPT_CHAR                  'e'
+#define RESOURCES_OPT_LONG                  "Resources"
+#define RESOURCES_OPT_DETAIL                "Path to web resources"
+// #define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Sample_webpage"
+#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/HTML/HTML_tutorial"
 
 /***************************************/
 
@@ -84,16 +92,11 @@ int main(int argc, char** argv)
     int server_port         ;
     int max_clients_num     ;
     bool concurrency_enabled;
-    bool secure_connection;
+    bool non_blocking       ;
+    bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
     char* path_resources = (char*)calloc(1024, 1);
-
-    SetOptionDefinitionBool(SIMULTANEOUS_CONNS_CHAR         ,
-                            SIMULTANEOUS_CONNS_LONG         ,
-                            SIMULTANEOUS_CONNS_DETAIL       ,
-                            SIMULTANEOUS_CONNS_DEFAULT_VALUE,
-                            &concurrency_enabled            );
 
     SetOptionDefinitionInt( PORT_OPT_CHAR       ,
                             PORT_OPT_LONG       ,
@@ -110,6 +113,18 @@ int main(int argc, char** argv)
                             CLIENTS_MAX_VALUE       ,
                             CLIENTS_DEFAULT_VALUE   ,
                             &max_clients_num        );
+
+    SetOptionDefinitionBool(SIMULTANEOUS_CONNS_CHAR         ,
+                            SIMULTANEOUS_CONNS_LONG         ,
+                            SIMULTANEOUS_CONNS_DETAIL       ,
+                            SIMULTANEOUS_CONNS_DEFAULT_VALUE,
+                            &concurrency_enabled            );
+
+    SetOptionDefinitionBool(NON_BLOCKING_CHAR           ,
+                            NON_BLOCKING_LONG           ,
+                            NON_BLOCKING_DETAIL         ,
+                            NON_BLOCKING_DEFAULT_VALUE  ,
+                            &non_blocking               );
 
     SetOptionDefinitionBool(SECURE_CONN_CHAR            ,
                             SECURE_CONN_LONG            ,
@@ -146,7 +161,7 @@ int main(int argc, char** argv)
 
     HttpSetPathToResources(path_resources);
 
-    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, secure_connection, path_cert, path_pkey, HttpServerDefaultResponse);
+    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, non_blocking, secure_connection, path_cert, path_pkey, HttpServerDefaultResponse);
 
     return 0;
 }
