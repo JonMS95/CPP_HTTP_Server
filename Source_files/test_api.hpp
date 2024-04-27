@@ -5,9 +5,6 @@
 /******** Include statements ********/
 /************************************/
 
-#include <stdbool.h>
-#include <openssl/ssl.h>
-
 /*************************************/
 
 /*************************************/
@@ -23,7 +20,7 @@ void HttpSetPathToResources(char* path);
 /// @param secure True if TLS security is wanted, false otherwise.
 /// @param ssl SSL data.
 /// @return < 0 if any error happened, 0 otherwise.
-int HttpServerDefaultResponse(int client_socket, bool secure, SSL** ssl);
+int HttpServerDefaultResponse(int client_socket);
 
 /*************************************/
 
