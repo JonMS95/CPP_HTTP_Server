@@ -6,14 +6,17 @@
 /************************************/
 
 #include <netinet/in.h>     // INET_ADDRSTRLEN.
-#include <fcntl.h>          // Set socket flags.
 #include <openssl/ssl.h>
 #include <arpa/inet.h>      // sockaddr_in, inet_addr
 #include <unistd.h>
 #include "SeverityLog_api.h"
+#include "ServerSocket_api.h"
 
 #include <string>
 #include <fstream>          // Read from file to string
+#include <vector>
+#include <sstream>
+#include <filesystem>
 
 /*************************************/
 
@@ -21,13 +24,11 @@
 /********* Define statements ********/
 /************************************/
 
-#define SERVER_SOCKET_LEN_RX_BUFFER             256     // RX buffer size.
-#define SERVER_SOCKET_LEN_TX_BUFFER             256     // TX buffer size.
+#define SERVER_SOCKET_LEN_RX_BUFFER             8192    // RX buffer size.
+#define SERVER_SOCKET_LEN_TX_BUFFER             8192    // TX buffer size.
 
-#define SERVER_SOCKET_MSG_ERR_GET_SOCKET_FLAGS  "Error while getting socket flags."
-#define SERVER_SOCKET_MSG_ERR_SET_SOCKET_FLAGS  "Error while setting O_NONBLOCK flag."
-
-#define SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT "Data read from client: <%s>"
+#define SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT     "Data read from client: <\r\n%s\r\n>"
+#define SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT    "Data written to client: <\r\n%s\r\n>"
 
 #define SERVER_SOCKET_MSG_CLIENT_DISCONNECTED   "Client with IP <%s> disconnected."
 
@@ -39,41 +40,226 @@
 
 std::string path_to_resources;
 
+typedef enum
+{
+    READ_TRY = 0        ,
+    CLIENT_DISCONNECTED ,
+    ADD_TO_READ_DATA    ,
+    // CHECK_STH_READ      ,
+    NOTHING_READ        ,
+    READ_END            ,
+
+} HTTP_READ_FSM;
+
 /************************************/
 
-/// @brief Get client's IP address.
-/// @param client_socket Client socket.
-/// @param client_IPv4 Target string to which client IPv4 address is meant to be copied.
-static void ServerSocketGetClientIPv4(int client_socket, char* client_IPv4)
+int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 {
-    struct sockaddr_in client;
-    socklen_t client_len = sizeof(client);
-    getpeername(client_socket, (struct sockaddr*)&client, &client_len);
-    inet_ntop(AF_INET, &client.sin_addr, client_IPv4, INET_ADDRSTRLEN);
+    char rx_buffer[SERVER_SOCKET_LEN_RX_BUFFER];
+    HTTP_READ_FSM http_read_fsm = READ_TRY;
+    ssize_t read_from_socket = -1;
+    bool keep_trying = true;
+    int end_connection = 1;
+    char client_IP_addr[INET_ADDRSTRLEN] = {};
+
+    memset(rx_buffer, 0, sizeof(rx_buffer));
+    ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+
+    while(keep_trying)
+    {
+        switch(http_read_fsm)
+        {
+            case READ_TRY:
+            {
+                read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
+
+                if(read_from_socket > 0)
+                {
+                    http_read_fsm = ADD_TO_READ_DATA;
+                }
+                else if(read_from_socket < 0)
+                {
+                    http_read_fsm = NOTHING_READ;
+                }
+                else
+                {
+                    http_read_fsm = CLIENT_DISCONNECTED;
+                }
+            }
+            break;
+
+            case ADD_TO_READ_DATA:
+            {
+                read_from_client += rx_buffer;
+                memset(rx_buffer, 0, read_from_socket);
+
+                http_read_fsm = READ_TRY;
+            }
+            break;
+
+            case NOTHING_READ:
+            {
+                if(read_from_client.size() > 0)
+                    end_connection = 0;
+
+                http_read_fsm = READ_END;
+            }
+            break;
+
+            case CLIENT_DISCONNECTED:
+            {
+                LOG_WNG(SERVER_SOCKET_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+
+                http_read_fsm = READ_END;
+            }
+            break;
+
+            case READ_END:
+            {
+                keep_trying = false;
+            }
+            break;
+
+            default:
+            break;
+        }
+    }
+
+    if(end_connection == 0 && read_from_client.size() > 0)
+        LOG_INF(SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+    
+    return end_connection;
 }
 
-/// @brief Set the socket as non-blocking.
-/// @param client_socket Client socket.
-/// @return < 0 is getting / settings flags failed 0, otherwise.
-static int ServerSocketSetNonBlocking(int client_socket)
+// int HttpReadFromClient(int& client_socket, std::string& read_from_client)
+// {
+//     char rx_buffer[SERVER_SOCKET_LEN_RX_BUFFER];
+//     HTTP_READ_FSM http_read_fsm = READ_TRY;
+//     ssize_t read_from_socket = -1;
+//     bool something_read = false;
+//     bool keep_trying = true;
+//     int end_connection = 0;
+//     char client_IP_addr[INET_ADDRSTRLEN] = {};
+
+//     memset(rx_buffer, 0, sizeof(rx_buffer));
+//     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+
+//     while(keep_trying)
+//     {
+//         switch(http_read_fsm)
+//         {
+//             case READ_TRY:
+//             {
+//                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
+
+//                 if(read_from_socket > 0)
+//                 {
+//                     http_read_fsm = ADD_TO_READ_DATA;
+//                 }
+//                 else if(read_from_socket < 0)
+//                 {
+//                     http_read_fsm = CHECK_STH_READ;
+//                 }
+//                 else
+//                 {
+//                     http_read_fsm = CLIENT_DISCONNECTED;
+//                 }
+//             }
+//             break;
+
+//             case ADD_TO_READ_DATA:
+//             {
+//                 something_read = true;
+//                 read_from_client += rx_buffer;
+//                 memset(rx_buffer, 0, read_from_socket);
+
+//                 http_read_fsm = READ_TRY;
+//             }
+//             break;
+
+//             case CHECK_STH_READ:
+//             {
+//                 if(something_read)
+//                 {
+//                     end_connection = 0;
+//                     http_read_fsm = READ_END;
+//                 }
+//                 else
+//                     http_read_fsm = READ_TRY;
+//             }
+//             break;
+
+//             case CLIENT_DISCONNECTED:
+//             {
+//                 end_connection = 1;
+//                 LOG_WNG(SERVER_SOCKET_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+
+//                 http_read_fsm = READ_END;
+//             }
+//             break;
+
+//             case READ_END:
+//             {
+//                 keep_trying = false;
+//             }
+//             break;
+
+//             default:
+//             break;
+//         }
+//     }
+
+//     if(read_from_client.size() > 0)
+//         LOG_INF(SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+    
+//     return end_connection;
+// }
+
+std::string HttpGetRequestLine(const std::string& msg_from_client)
 {
-    // First, try to get socket's current flag set.
-    int flags = fcntl(client_socket, F_GETFL, 0);
-    if(flags < 0)
-    {
-        LOG_ERR(SERVER_SOCKET_MSG_ERR_GET_SOCKET_FLAGS);
-        return flags;
+    size_t new_line_pos = msg_from_client.find("\r\n");
+
+    return msg_from_client.substr(0, new_line_pos);
+}
+
+std::vector<std::string> HttpExtractWordsFromReqLine(const std::string& input)
+{
+    const std::string request_line = HttpGetRequestLine(input);
+    std::vector<std::string> words;
+    std::istringstream iss(request_line);
+    std::string word;
+
+    while (iss >> word) {
+        words.push_back(word);
     }
 
-    // Then, set the O_NONBLOCK flag (which, as the name suggests, makes the socket non-blocking).
-    flags |= O_NONBLOCK;
-    if(fcntl(client_socket, F_SETFL, flags) < 0)
-    {
-        LOG_ERR(SERVER_SOCKET_MSG_ERR_SET_SOCKET_FLAGS);
-        return flags;
-    }
+    return words;
+}
 
-    return 0;
+std::string HttpProcessRequest(const std::string&read_from_client)
+{
+    std::vector<std::string> words_from_req_line = HttpExtractWordsFromReqLine(read_from_client);
+
+    if(words_from_req_line[1] == "" || words_from_req_line[1] == "/")
+        words_from_req_line[1] = "/index.html";
+
+    LOG_INF("METHOD:    %s", words_from_req_line[0].c_str());
+    LOG_INF("RESOURCE:  %s", words_from_req_line[1].c_str());
+    LOG_INF("PROTOCOL:  %s", words_from_req_line[2].c_str());
+
+    return words_from_req_line[1];
+}
+
+std::string HttpGetFileExtension(const std::string& text)
+{
+    size_t dotPosition = text.find_last_of('.');
+    if (dotPosition != std::string::npos && dotPosition < text.length() - 1)
+    {
+        return text.substr(dotPosition + 1);
+    }
+    
+    // No dot found or dot is the last character
+    return "";
 }
 
 void HttpSetPathToResources(char* path)
@@ -86,18 +272,33 @@ std::string HttpGetPathToResources(void)
     return path_to_resources;
 }
 
-int HttpCopyHTMLToString(std::string& requested_resource, std::string& dest)
+bool fileExists(const std::string& filePath)
 {
-    if(requested_resource == "")
-        requested_resource = "index.html";
+    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
+}
+
+int HttpCopyFileToString(const std::string& requested_resource, std::string& dest)
+{
+    // Create a modifiable copy of the requested resource
+    std::string requested_resource_name = requested_resource;
     
-    std::string path_to_requested_resource = HttpGetPathToResources() + '/' + requested_resource;
+    // If no resource has been specified, then return the index page by default.
+    if(requested_resource_name == "" || requested_resource_name == "/")
+        requested_resource_name = "/index.html";
+    
+    std::string path_to_requested_resource;
+
+    if(fileExists(HttpGetPathToResources() + requested_resource_name))
+        path_to_requested_resource = HttpGetPathToResources() + requested_resource_name;
+    else
+        path_to_requested_resource = HttpGetPathToResources() + "/page_not_found.html";
 
     std::ifstream file(path_to_requested_resource); // Open the file
 
+    // If not even the 404 error page could be found, then an error sould be returned.
     if (!file.is_open())
     {
-        LOG_ERR("Error opening file.");
+        LOG_ERR("Error opening file \"%s\".", path_to_requested_resource.c_str());
         return -101;
     }
 
@@ -111,109 +312,109 @@ int HttpCopyHTMLToString(std::string& requested_resource, std::string& dest)
     return 0;
 }
 
+std::string HttpDefineContentType(const std::string& resource_extension)
+{
+    if(resource_extension == "html")
+        return "text/html";
+    
+    if(resource_extension == "ico")
+        return "image/x-icon";
+    
+    return "text/html";
+}
+
+unsigned long int HttpGenerateResponse(const std::string& requested_resource, std::string& httpResponse, const std::string& resource_extension)
+{
+    std::string resource_file;
+    int get_html = HttpCopyFileToString(requested_resource, resource_file);
+    if(get_html < 0)
+        return get_html;
+
+    httpResponse = "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: " + HttpDefineContentType(resource_extension) + "\r\n"
+                    "Content-Length: " +  std::to_string(resource_file.size()) + "\r\n"
+                    "\r\n" +
+                    resource_file;
+
+    return httpResponse.size();
+}
+
+void HttpWriteToClient(int& client_socket, const std::string& httpResponse)
+{
+    // char tx_buffer[SERVER_SOCKET_LEN_TX_BUFFER];
+    // const char* data_to_send = httpResponse.data();
+    
+    // unsigned int num_of_full_buffer_writes = httpResponse.size() / sizeof(tx_buffer);
+    // unsigned int partial_write_size = httpResponse.size() % sizeof(tx_buffer);
+
+    // LOG_ERR("httpResponse.size() = %lu", httpResponse.size());
+    // LOG_ERR("TX buffer size: %lu", sizeof(tx_buffer));
+    // LOG_ERR("num_of_full_buffer_writes = %lu", num_of_full_buffer_writes);
+    // LOG_ERR("partial_write_size = %lu", partial_write_size);
+    // unsigned int total_num_of_writes = num_of_full_buffer_writes;
+    // if(partial_write_size != 0)
+    //     ++total_num_of_writes;
+
+    // LOG_ERR("Number of writes: %lu", total_num_of_writes);
+
+    // for(unsigned int i = 0; i < num_of_full_buffer_writes; i++)
+    // {
+    //     memset(tx_buffer, 0, sizeof(tx_buffer));
+    //     memcpy(tx_buffer, data_to_send + i * sizeof(tx_buffer), sizeof(tx_buffer));
+    //     // SERVER_SOCKET_WRITE should not be used here. If so, files will only be sent until the first zero within them is found.
+    //     ServerSocketWrite(client_socket, tx_buffer, sizeof(tx_buffer));
+    // }
+
+    // if(httpResponse.size() % sizeof(tx_buffer) != 0)
+    // {
+    //     memset(tx_buffer, 0, sizeof(tx_buffer));
+    //     memcpy(tx_buffer, data_to_send + num_of_full_buffer_writes * sizeof(tx_buffer), partial_write_size);
+    //     // SERVER_SOCKET_WRITE should not be used here. If so, files will only be sent until the first zero within them is found.
+    //     ServerSocketWrite(client_socket, tx_buffer, partial_write_size);
+    // }
+
+    const char* data_to_send = httpResponse.data();
+
+    ServerSocketWrite(client_socket, (char*)httpResponse.data(), httpResponse.size());
+
+    LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, data_to_send);
+}
+
 /// @brief Reads from client, then sends a response.
 /// @param client_socket Client socket.
 /// @param secure True if TLS security is wanted, false otherwise.
 /// @param ssl SSL data.
-/// @return < 0 if any error happened, 0 otherwise.
-int HttpServerDefaultResponse(int client_socket, bool secure, SSL** ssl)
+/// @return < 0 if any error happened, > 0 if want to interact again, 0 otherwise.
+int HttpServerDefaultResponse(int client_socket)
 {
-    //////////////////////////////////////////////////////////////////////
-    // START CUSTOM INTERACT FUNCTION
-    //////////////////////////////////////////////////////////////////////
+    // First, try to read something from client.
+    std::string read_from_client;
 
-    ////////////////////////////////
-    // GET THE CLIENT IP ADDR FIRST.
-    ////////////////////////////////
+    int end_connection = HttpReadFromClient(client_socket, read_from_client);
+    
+    // If client got disconnected while trying to read, end_connection > 0.
+    // In that case, exit and wait for an incoming connection to happen again.
+    if(end_connection)
+        return 0;
+    
+    // Once something has been read, process the request.
+    std::string requested_resource = HttpProcessRequest(read_from_client);
 
-    // Get client IP first, then Log it's IP address.
-    char client_IP_addr[INET_ADDRSTRLEN] = {};
-    ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+    std::string resource_extension = HttpGetFileExtension(requested_resource);
+    LOG_ERR("resource_extension = %s", resource_extension.c_str());
 
-    // Set socket as non-blocking.
-    int set_non_blocking = ServerSocketSetNonBlocking(client_socket);
-    if(set_non_blocking < 0)
-        return set_non_blocking;
+    // After processing the request, generate a proper response.
+    std::string httpResponse;
+    unsigned long int response_size = HttpGenerateResponse(requested_resource, httpResponse, resource_extension);
 
-    char rx_buffer[SERVER_SOCKET_LEN_RX_BUFFER];
-    memset(rx_buffer, 0, sizeof(rx_buffer));
+    // If response could not be generated, exit and wait for an incoming connection to happen again.
+    if(response_size < 0)
+        return 0;
 
-    ssize_t read_from_socket = -1;
-    bool something_read = false;
+    // Finally, send the generated response back to the client.
+    HttpWriteToClient(client_socket, httpResponse);
 
-    while( (read_from_socket >= 0) || (something_read == false) )
-    {
-        if(!secure)
-            read_from_socket = read(client_socket, rx_buffer, sizeof(rx_buffer));
-        else
-            read_from_socket = SSL_read(*ssl, rx_buffer, sizeof(rx_buffer));
-
-        // Check if the client is still connected, or if no data has been received.
-        if(read_from_socket == 0)
-        {
-            LOG_WNG(SERVER_SOCKET_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-            break;
-        }
-
-        // If no data has been found in the rx buffer but it has been found previously, then exit.
-        // It is assumed that all the data that was meant to be read has already been read.
-        if(read_from_socket < 0)
-        {
-            if(something_read)
-                break;
-            
-            continue;
-        }
-
-        // If any data has been received, then set the something_read flag and display it on console.
-        // Remove possible ending new line and carriage return characters first.
-        something_read = true;
-        
-        if(strlen(rx_buffer) > 0 && rx_buffer[strlen(rx_buffer) - 1] == '\n')
-            rx_buffer[strlen(rx_buffer) - 1] = 0;
-
-        if(strlen(rx_buffer) > 0 && rx_buffer[strlen(rx_buffer) - 1] == '\r')
-            rx_buffer[strlen(rx_buffer) - 1] = 0;
-
-        if(strlen(rx_buffer) > 0)
-        {
-            LOG_INF(SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT, rx_buffer);
-        }
-
-        // Clean the buffer after reading.
-        memset(rx_buffer, 0, read_from_socket);
-
-        // Wait for a millisecond before trying to read again.
-        usleep(1000);
-    }
-
-    std::string html_page;
-    std::string requested_resource = "";
-
-    int get_html = HttpCopyHTMLToString(requested_resource, html_page);
-    if(get_html < 0)
-        return get_html;
-
-    // Construct HTTP response with headers and HTML content
-    std::string httpResponse = "HTTP/1.1 200 OK\r\n"
-                               "Content-Type: text/html\r\n"
-                               "Content-Length: " +  std::to_string(html_page.size()) + "\r\n"
-                               "\r\n" +
-                               html_page;
-
-    // Send a message to the client as soon as it is accepted.
-    char tx_buffer[SERVER_SOCKET_LEN_TX_BUFFER];
-    memset(tx_buffer, 0, sizeof(tx_buffer));
-    sprintf(tx_buffer, httpResponse.c_str(), client_IP_addr);
-
-    if(!secure)
-        write(client_socket, tx_buffer, strlen(tx_buffer));
-    else
-        SSL_write(*ssl, tx_buffer, strlen(tx_buffer));
-
-    //////////////////////////////////////////////////////////////////////
-    // END CUSTOM INTERACT FUNCTION
-    //////////////////////////////////////////////////////////////////////
-
-    return 0;
+    // JMS TESTING. 1 makes the function keep interacting, whereas 0 send the TCP socket back to the ACCEPT state.
+    return 1;
+    // return 0;
 }
