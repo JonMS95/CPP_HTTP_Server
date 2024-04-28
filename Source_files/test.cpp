@@ -73,6 +73,9 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
             {
                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
 
+                if(errno != EAGAIN && errno != EWOULDBLOCK)
+                    LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
+
                 if(read_from_socket > 0)
                 {
                     http_read_fsm = ADD_TO_READ_DATA;
@@ -306,6 +309,14 @@ int HttpCopyFileToString(const std::string& requested_resource, std::string& des
     dest.assign((   std::istreambuf_iterator<char>(file))   ,
                     std::istreambuf_iterator<char>())       ;
 
+    // // Replace '\n' with "\r\n"
+    // size_t pos = 0;
+    // while ((pos = dest.find('\n', pos)) != std::string::npos)
+    // {
+    //     dest.replace(pos, 1, "\r\n");
+    //     pos += 2; // Move past the inserted "\r\n"
+    // }
+
     // Close the file
     file.close();
 
@@ -319,6 +330,9 @@ std::string HttpDefineContentType(const std::string& resource_extension)
     
     if(resource_extension == "ico")
         return "image/x-icon";
+    
+    if(resource_extension == "png")
+        return "image/png";
     
     return "text/html";
 }
@@ -341,43 +355,16 @@ unsigned long int HttpGenerateResponse(const std::string& requested_resource, st
 
 void HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 {
-    // char tx_buffer[SERVER_SOCKET_LEN_TX_BUFFER];
-    // const char* data_to_send = httpResponse.data();
-    
-    // unsigned int num_of_full_buffer_writes = httpResponse.size() / sizeof(tx_buffer);
-    // unsigned int partial_write_size = httpResponse.size() % sizeof(tx_buffer);
-
-    // LOG_ERR("httpResponse.size() = %lu", httpResponse.size());
-    // LOG_ERR("TX buffer size: %lu", sizeof(tx_buffer));
-    // LOG_ERR("num_of_full_buffer_writes = %lu", num_of_full_buffer_writes);
-    // LOG_ERR("partial_write_size = %lu", partial_write_size);
-    // unsigned int total_num_of_writes = num_of_full_buffer_writes;
-    // if(partial_write_size != 0)
-    //     ++total_num_of_writes;
-
-    // LOG_ERR("Number of writes: %lu", total_num_of_writes);
-
-    // for(unsigned int i = 0; i < num_of_full_buffer_writes; i++)
-    // {
-    //     memset(tx_buffer, 0, sizeof(tx_buffer));
-    //     memcpy(tx_buffer, data_to_send + i * sizeof(tx_buffer), sizeof(tx_buffer));
-    //     // SERVER_SOCKET_WRITE should not be used here. If so, files will only be sent until the first zero within them is found.
-    //     ServerSocketWrite(client_socket, tx_buffer, sizeof(tx_buffer));
-    // }
-
-    // if(httpResponse.size() % sizeof(tx_buffer) != 0)
-    // {
-    //     memset(tx_buffer, 0, sizeof(tx_buffer));
-    //     memcpy(tx_buffer, data_to_send + num_of_full_buffer_writes * sizeof(tx_buffer), partial_write_size);
-    //     // SERVER_SOCKET_WRITE should not be used here. If so, files will only be sent until the first zero within them is found.
-    //     ServerSocketWrite(client_socket, tx_buffer, partial_write_size);
-    // }
-
     const char* data_to_send = httpResponse.data();
 
     ServerSocketWrite(client_socket, (char*)httpResponse.data(), httpResponse.size());
 
-    LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, data_to_send);
+    if(errno != EAGAIN && errno != EWOULDBLOCK)
+        LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
+
+    // // JMS TESTING
+    // LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, data_to_send);
+    LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, "data to send");
 }
 
 /// @brief Reads from client, then sends a response.
@@ -397,8 +384,10 @@ int HttpServerDefaultResponse(int client_socket)
     if(end_connection)
         return 0;
     
-    // Once something has been read, process the request.
+    // Once something has been read, process the request. Erase the current request string afterwards,
+    // leaving enough space for potential incoming requests.
     std::string requested_resource = HttpProcessRequest(read_from_client);
+    read_from_client.clear();
 
     std::string resource_extension = HttpGetFileExtension(requested_resource);
     LOG_ERR("resource_extension = %s", resource_extension.c_str());
