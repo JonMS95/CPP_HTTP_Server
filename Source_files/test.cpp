@@ -71,6 +71,8 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
         {
             case READ_TRY:
             {
+                #include <unistd.h>
+                usleep(100000);
                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
 
                 if(errno != EAGAIN && errno != EWOULDBLOCK)
@@ -355,14 +357,18 @@ unsigned long int HttpGenerateResponse(const std::string& requested_resource, st
 
 void HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 {
-    ServerSocketWrite(client_socket, httpResponse.data(), httpResponse.size());
+    int socket_write = ServerSocketWrite(client_socket, httpResponse.data(), httpResponse.size());
+    LOG_ERR("socket_write = %d", socket_write);
+    LOG_ERR("httpResponse.size() = %lu", httpResponse.size());
+    if(socket_write < httpResponse.size())
+        LOG_ERR("PARTIAL WRITE DETECTED!!!");
 
     if(errno != EAGAIN && errno != EWOULDBLOCK)
         LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
 
     // // JMS TESTING
-    // LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, data_to_send);
-    LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, "data to send");
+    LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
+    // LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, "data to send");
 }
 
 /// @brief Reads from client, then sends a response.
