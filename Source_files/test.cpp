@@ -30,7 +30,7 @@
 #define SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT     "Data read from client: <\r\n%s\r\n>"
 #define SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT    "Data written to client: <\r\n%s\r\n>"
 
-#define SERVER_SOCKET_MSG_CLIENT_DISCONNECTED   "Client with IP <%s> disconnected."
+#define SERVER_SOCKET_MSG_CLIENT_DISCONNECTED       "Client with IP <%s> disconnected."
 
 /************************************/
 
@@ -355,20 +355,38 @@ unsigned long int HttpGenerateResponse(const std::string& requested_resource, st
     return httpResponse.size();
 }
 
-void HttpWriteToClient(int& client_socket, const std::string& httpResponse)
+int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 {
-    int socket_write = ServerSocketWrite(client_socket, httpResponse.data(), httpResponse.size());
-    LOG_ERR("socket_write = %d", socket_write);
-    LOG_ERR("httpResponse.size() = %lu", httpResponse.size());
-    if(socket_write < httpResponse.size())
-        LOG_ERR("PARTIAL WRITE DETECTED!!!");
+    unsigned long remaining_data_len    = httpResponse.size();
+    unsigned long bytes_already_written = 0;
 
-    if(errno != EAGAIN && errno != EWOULDBLOCK)
-        LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
+    while(remaining_data_len > 0)
+    {
+        long int socket_write      = ServerSocketWrite(client_socket, httpResponse.data() + bytes_already_written, remaining_data_len);
 
-    // // JMS TESTING
+        if((socket_write < 0))
+        {
+            if((errno != EAGAIN && errno != EWOULDBLOCK))
+                return -104;
+            
+            continue;
+        }
+
+        if(socket_write == 0)
+        {
+            char client_IP_addr[INET_ADDRSTRLEN] = {};
+            ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+            LOG_WNG(SERVER_SOCKET_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+            return -105;
+        }
+
+        bytes_already_written   += socket_write;
+        remaining_data_len      -= socket_write;
+    }
+
     LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
-    // LOG_DBG(SERVER_SOCKET_MSG_DATA_WRITTEN_TO_CLIENT, "data to send");
+    
+    return 0;
 }
 
 /// @brief Reads from client, then sends a response.
