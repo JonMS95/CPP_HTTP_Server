@@ -355,9 +355,7 @@ unsigned long int HttpGenerateResponse(const std::string& requested_resource, st
 
 void HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 {
-    const char* data_to_send = httpResponse.data();
-
-    ServerSocketWrite(client_socket, (char*)httpResponse.data(), httpResponse.size());
+    ServerSocketWrite(client_socket, httpResponse.data(), httpResponse.size());
 
     if(errno != EAGAIN && errno != EWOULDBLOCK)
         LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
