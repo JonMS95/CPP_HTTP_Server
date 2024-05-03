@@ -161,7 +161,7 @@ int main(int argc, char** argv)
 
     HttpSetPathToResources(path_resources);
 
-    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, non_blocking, secure_connection, path_cert, path_pkey, HttpServerRun);
+    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, false, secure_connection, path_cert, path_pkey, HttpServerRun);
 
     return 0;
 }
