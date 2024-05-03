@@ -87,9 +87,6 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
             {
                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
 
-                // if(errno != EAGAIN && errno != EWOULDBLOCK)
-                //     LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
-
                 if(read_from_socket == 0)
                 {
                     LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
@@ -104,10 +101,11 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 else // read_from_socket < 0
                 {
                     if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
-                    {
-                        end_connection = 1;
-                        http_read_fsm = READ_END;
-                    }
+                        LOG_ERR("ERROR WHILE READING");
+                    
+                    LOG_WNG("TIMEOUT EXPIRED!");
+                    end_connection = 1;
+                    http_read_fsm = READ_END;
                 }
             }
             break;
@@ -140,93 +138,6 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 
     return end_connection;
 }
-
-// /// @brief WIP
-// /// @param client_socket 
-// /// @param read_from_client 
-// /// @return 
-// int HttpReadFromClient(int& client_socket, std::string& read_from_client)
-// {
-//     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
-//     HTTP_READ_FSM http_read_fsm = READ_TRY;
-//     ssize_t read_from_socket = -1;
-//     bool keep_trying = true;
-//     int end_connection = 1;
-//     char client_IP_addr[INET_ADDRSTRLEN] = {};
-
-//     memset(rx_buffer, 0, sizeof(rx_buffer));
-//     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
-
-//     while(keep_trying)
-//     {
-//         switch(http_read_fsm)
-//         {
-//             case READ_TRY:
-//             {
-//                 #include <unistd.h>
-//                 usleep(100000);
-//                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
-
-//                 if(errno != EAGAIN && errno != EWOULDBLOCK)
-//                     LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
-
-//                 if(read_from_socket > 0)
-//                 {
-//                     http_read_fsm = ADD_TO_READ_DATA;
-//                 }
-//                 else if(read_from_socket < 0)
-//                 {
-//                     http_read_fsm = NOTHING_READ;
-//                 }
-//                 else
-//                 {
-//                     http_read_fsm = CLIENT_DISCONNECTED;
-//                 }
-//             }
-//             break;
-
-//             case ADD_TO_READ_DATA:
-//             {
-//                 read_from_client += rx_buffer;
-//                 memset(rx_buffer, 0, read_from_socket);
-
-//                 http_read_fsm = READ_TRY;
-//             }
-//             break;
-
-//             case NOTHING_READ:
-//             {
-//                 if(read_from_client.size() > 0)
-//                     end_connection = 0;
-
-//                 http_read_fsm = READ_END;
-//             }
-//             break;
-
-//             case CLIENT_DISCONNECTED:
-//             {
-//                 LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-
-//                 http_read_fsm = READ_END;
-//             }
-//             break;
-
-//             case READ_END:
-//             {
-//                 keep_trying = false;
-//             }
-//             break;
-
-//             default:
-//             break;
-//         }
-//     }
-
-//     if(end_connection == 0 && read_from_client.size() > 0)
-//         LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
-    
-//     return end_connection;
-// }
 
 /// @brief Processes first line of message received from the client.
 /// @param input First line of message received from the client.
