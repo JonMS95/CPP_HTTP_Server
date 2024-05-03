@@ -52,6 +52,17 @@ typedef enum
 
 /************************************/
 
+bool HttpCheckRequestEnd(std::string& request)
+{
+    // Check first whether or not is the request message long enough.
+    if (request.length() < 4)
+        return false;
+    
+    std::string end = request.substr(request.length() - 4); // Extract last 4 characters
+    
+    return (end == "\r\n\r\n");
+}
+
 /// @brief WIP
 /// @param client_socket 
 /// @param read_from_client 
@@ -74,24 +85,29 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
         {
             case READ_TRY:
             {
-                #include <unistd.h>
-                usleep(100000);
                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
 
-                if(errno != EAGAIN && errno != EWOULDBLOCK)
-                    LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
+                // if(errno != EAGAIN && errno != EWOULDBLOCK)
+                //     LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
 
-                if(read_from_socket > 0)
+                if(read_from_socket == 0)
                 {
+                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+                    end_connection = 1;
+                    http_read_fsm = READ_END;
+                }
+                else if(read_from_socket > 0)
+                {
+                    end_connection = 0;
                     http_read_fsm = ADD_TO_READ_DATA;
                 }
-                else if(read_from_socket < 0)
+                else // read_from_socket < 0
                 {
-                    http_read_fsm = NOTHING_READ;
-                }
-                else
-                {
-                    http_read_fsm = CLIENT_DISCONNECTED;
+                    if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
+                    {
+                        end_connection = 1;
+                        http_read_fsm = READ_END;
+                    }
                 }
             }
             break;
@@ -101,24 +117,13 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 read_from_client += rx_buffer;
                 memset(rx_buffer, 0, read_from_socket);
 
-                http_read_fsm = READ_TRY;
-            }
-            break;
-
-            case NOTHING_READ:
-            {
-                if(read_from_client.size() > 0)
-                    end_connection = 0;
-
-                http_read_fsm = READ_END;
-            }
-            break;
-
-            case CLIENT_DISCONNECTED:
-            {
-                LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-
-                http_read_fsm = READ_END;
+                if(HttpCheckRequestEnd(read_from_client))
+                {
+                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+                    http_read_fsm = READ_END;
+                }
+                else
+                    http_read_fsm = READ_TRY;
             }
             break;
 
@@ -131,42 +136,47 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
             default:
             break;
         }
-    }
+    }   
 
-    if(end_connection == 0 && read_from_client.size() > 0)
-        LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
-    
     return end_connection;
 }
 
+// /// @brief WIP
+// /// @param client_socket 
+// /// @param read_from_client 
+// /// @return 
 // int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 // {
-//     char rx_buffer[SERVER_SOCKET_LEN_RX_BUFFER];
+//     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
 //     HTTP_READ_FSM http_read_fsm = READ_TRY;
 //     ssize_t read_from_socket = -1;
-//     bool something_read = false;
 //     bool keep_trying = true;
-//     int end_connection = 0;
+//     int end_connection = 1;
 //     char client_IP_addr[INET_ADDRSTRLEN] = {};
-//
+
 //     memset(rx_buffer, 0, sizeof(rx_buffer));
 //     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
-//
+
 //     while(keep_trying)
 //     {
 //         switch(http_read_fsm)
 //         {
 //             case READ_TRY:
 //             {
+//                 #include <unistd.h>
+//                 usleep(100000);
 //                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
-//
+
+//                 if(errno != EAGAIN && errno != EWOULDBLOCK)
+//                     LOG_ERR("errno: %d, LINE: %d", errno, __LINE__);
+
 //                 if(read_from_socket > 0)
 //                 {
 //                     http_read_fsm = ADD_TO_READ_DATA;
 //                 }
 //                 else if(read_from_socket < 0)
 //                 {
-//                     http_read_fsm = CHECK_STH_READ;
+//                     http_read_fsm = NOTHING_READ;
 //                 }
 //                 else
 //                 {
@@ -174,52 +184,47 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 //                 }
 //             }
 //             break;
-//
+
 //             case ADD_TO_READ_DATA:
 //             {
-//                 something_read = true;
 //                 read_from_client += rx_buffer;
 //                 memset(rx_buffer, 0, read_from_socket);
-//
+
 //                 http_read_fsm = READ_TRY;
 //             }
 //             break;
-//
-//             case CHECK_STH_READ:
+
+//             case NOTHING_READ:
 //             {
-//                 if(something_read)
-//                 {
+//                 if(read_from_client.size() > 0)
 //                     end_connection = 0;
-//                     http_read_fsm = READ_END;
-//                 }
-//                 else
-//                     http_read_fsm = READ_TRY;
-//             }
-//             break;
-//
-//             case CLIENT_DISCONNECTED:
-//             {
-//                 end_connection = 1;
-//                 LOG_WNG(SERVER_SOCKET_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-//
+
 //                 http_read_fsm = READ_END;
 //             }
 //             break;
-//
+
+//             case CLIENT_DISCONNECTED:
+//             {
+//                 LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+
+//                 http_read_fsm = READ_END;
+//             }
+//             break;
+
 //             case READ_END:
 //             {
 //                 keep_trying = false;
 //             }
 //             break;
-//
+
 //             default:
 //             break;
 //         }
 //     }
-//
-//     if(read_from_client.size() > 0)
-//         LOG_INF(SERVER_SOCKET_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
-//  
+
+//     if(end_connection == 0 && read_from_client.size() > 0)
+//         LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+    
 //     return end_connection;
 // }
 
