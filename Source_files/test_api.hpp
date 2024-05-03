@@ -17,10 +17,8 @@ void HttpSetPathToResources(char* path);
 
 /// @brief Reads from client, then sends a response.
 /// @param client_socket Client socket.
-/// @param secure True if TLS security is wanted, false otherwise.
-/// @param ssl SSL data.
 /// @return < 0 if any error happened, 0 otherwise.
-int HttpServerDefaultResponse(int client_socket);
+int HttpServerRun(int client_socket);
 
 /*************************************/
 
