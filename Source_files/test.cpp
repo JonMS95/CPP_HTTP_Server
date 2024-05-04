@@ -41,14 +41,20 @@ static std::string path_to_resources;
 
 typedef enum
 {
-    READ_TRY = 0        ,
-    CLIENT_DISCONNECTED ,
-    ADD_TO_READ_DATA    ,
-    // CHECK_STH_READ      ,
-    NOTHING_READ        ,
-    READ_END            ,
-
+    HTTP_READ_FSM_READ_TRY              = 0 ,
+    HTTP_READ_FSM_CLIENT_DISCONNECTED       ,
+    HTTP_READ_FSM_ADD_TO_READ_DATA          ,
+    HTTP_READ_FSM_READ_END                  ,
 } HTTP_READ_FSM;
+
+typedef enum
+{
+    HTTP_RUN_FSM_READ               = 0 ,
+    HTTP_RUN_FSM_PROCESS_REQUEST        ,
+    HTTP_RUN_FSM_GENERATE_RESPONSE      ,
+    HTTP_RUN_FSM_WRITE                  ,
+    HTTP_RUN_FSM_END_CONNECTION         ,
+} HTTP_RUN_FSM;
 
 /************************************/
 
@@ -70,20 +76,21 @@ bool HttpCheckRequestEnd(std::string& request)
 int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 {
     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
-    HTTP_READ_FSM http_read_fsm = READ_TRY;
+    HTTP_READ_FSM http_read_fsm = HTTP_READ_FSM_READ_TRY;
     ssize_t read_from_socket = -1;
     bool keep_trying = true;
     int end_connection = 1;
     char client_IP_addr[INET_ADDRSTRLEN] = {};
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
+    read_from_client.clear();
     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
 
     while(keep_trying)
     {
         switch(http_read_fsm)
         {
-            case READ_TRY:
+            case HTTP_READ_FSM_READ_TRY:
             {
                 read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
 
@@ -91,12 +98,12 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 {
                     LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
                     end_connection = 1;
-                    http_read_fsm = READ_END;
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else if(read_from_socket > 0)
                 {
                     end_connection = 0;
-                    http_read_fsm = ADD_TO_READ_DATA;
+                    http_read_fsm = HTTP_READ_FSM_ADD_TO_READ_DATA;
                 }
                 else // read_from_socket < 0
                 {
@@ -105,12 +112,12 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                     
                     LOG_WNG("TIMEOUT EXPIRED!");
                     end_connection = 1;
-                    http_read_fsm = READ_END;
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
             }
             break;
 
-            case ADD_TO_READ_DATA:
+            case HTTP_READ_FSM_ADD_TO_READ_DATA:
             {
                 read_from_client += rx_buffer;
                 memset(rx_buffer, 0, read_from_socket);
@@ -118,14 +125,14 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 if(HttpCheckRequestEnd(read_from_client))
                 {
                     LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
-                    http_read_fsm = READ_END;
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else
-                    http_read_fsm = READ_TRY;
+                    http_read_fsm = HTTP_READ_FSM_READ_TRY;
             }
             break;
 
-            case READ_END:
+            case HTTP_READ_FSM_READ_END:
             {
                 keep_trying = false;
             }
@@ -293,38 +300,103 @@ int HttpCopyFileToString(const std::string& requested_resource, std::string& des
     return 0;
 }
 
-/// @brief Gets content type string based on requested resource's file extension.
-/// @param resource_extension Requested resource's file extension.
-/// @return Content type string.
-std::string HttpDefineContentType(const std::string& resource_extension)
+std::map<std::string, std::string> extension_to_content_type =
 {
-    if(resource_extension == "html")
-        return "text/html";
-    
-    if(resource_extension == "ico")
-        return "image/x-icon";
-    
-    if(resource_extension == "png")
-        return "image/png";
-    
-    return "text/html";
-}
+    {"aac"      ,	"audio/aac"                                                                 },
+    {"abw"      ,	"application/x-abiword"                                                     },
+    {"apng"     ,   "image/apng"                                                                },
+    {"arc"      ,	"application/x-freearc"                                                     },
+    {"avif"     ,	"image/avif"                                                                },
+    {"avi"      ,	"video/x-msvideo"                                                           },
+    {"azw"      ,	"application/vnd.amazon.ebook"                                              },
+    {"bin"      ,	"application/octet-stream"                                                  },
+    {"bmp"      ,	"image/bmp"                                                                 },
+    {"bz"       ,	"application/x-bzip"                                                        },
+    {"bz2"      ,	"application/x-bzip2"                                                       },
+    {"cda"      ,	"application/x-cdf"                                                         },
+    {"csh"      ,	"application/x-csh"                                                         },
+    {"css"      ,	"text/css"                                                                  },
+    {"csv"      ,	"text/csv"                                                                  },
+    {"doc"      ,	"application/msword"                                                        },
+    {"docx"     ,	"application/vnd.openxmlformats-officedocument.wordprocessingml.document"   },
+    {"eot"      ,	"application/vnd.ms-fontobject"                                             },
+    {"epub"     ,	"application/epub+zip"                                                      },
+    {"gz"       ,	"application/gzip"                                                          },
+    {"gif"      ,	"image/gif"                                                                 },
+    {"htm"      ,	"text/html"                                                                 },
+    {"html"     ,	"text/html"                                                                 },
+    {"ico"      ,	"image/vnd.microsoft.icon"                                                  },
+    {"ics"      ,	"text/calendar"                                                             },
+    {"jar"      ,	"application/java-archive"                                                  },
+    {"jpg"      ,	"image/jpeg"                                                                },
+    {"jpeg"     ,	"image/jpeg"                                                                },
+    {"js"       ,	"javascript"                                                                },
+    {"json"     ,	"application/json"                                                          },
+    {"jsonld"   ,	"application/ld+json"                                                       },
+    {"mid"      ,	"audio/x-midi"                                                              },
+    {"midi"     ,	"audio/x-midi"                                                              },
+    {"mjs"      ,	"text/javascript"                                                           },
+    {"mp3"      ,	"audio/mpeg"                                                                },
+    {"mp4"      ,	"video/mp4"                                                                 },
+    {"mpeg"     ,	"video/mpeg"                                                                },
+    {"mpkg"     ,	"application/vnd.apple.installer+xml"                                       },
+    {"odp"      ,	"application/vnd.oasis.opendocument.presentation"                           },
+    {"ods"      ,	"application/vnd.oasis.opendocument.spreadsheet"                            },
+    {"odt"      ,	"application/vnd.oasis.opendocument.text"                                   },
+    {"oga"      ,	"audio/ogg"                                                                 },
+    {"ogv"      ,	"video/ogg"                                                                 },
+    {"ogx"      ,	"application/ogg"                                                           },
+    {"opus"     ,	"audio/opus"                                                                },
+    {"otf"      ,	"font/otf"                                                                  },
+    {"png"      ,	"image/png"                                                                 },
+    {"pdf"      ,	"application/pdf"                                                           },
+    {"php"      ,	"application/x-httpd-php"                                                   },
+    {"ppt"      ,	"application/vnd.ms-powerpoint"                                             },
+    {"pptx"     ,	"application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+    {"rar"      ,	"application/vnd.rar"                                                       },
+    {"rtf"      ,	"application/rtf"                                                           },
+    {"sh"       ,	"application/x-sh"                                                          },
+    {"svg"      ,	"image/svg+xml"                                                             },
+    {"tar"      ,	"application/x-tar"                                                         },
+    {"tif"      ,	"image/tiff"                                                                },
+    {"tiff"     ,	"image/tiff"                                                                },
+    {"ts"       ,	"video/mp2t"                                                                },
+    {"ttf"      ,	"font/ttf"                                                                  },
+    {"txt"      ,	"text/plain"                                                                },
+    {"vsd"      ,	"application/vnd.visio"                                                     },
+    {"wav"      ,	"audio/wav"                                                                 },
+    {"weba"     ,	"audio/webm"                                                                },
+    {"webm"     ,	"video/webm"                                                                },
+    {"webp"     ,	"image/webp"                                                                },
+    {"woff"     ,	"font/woff"                                                                 },
+    {"woff2"    ,	"font/woff2"                                                                },
+    {"xhtml"    ,	"application/xhtml+xml"                                                     },
+    {"xls"      ,	"application/vnd.ms-excel"                                                  },
+    {"xlsx"     ,	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"         },
+    {"xml"      ,	"application/xml"                                                           },
+    {"xul"      ,	"application/vnd.mozilla.xul+xml"                                           },
+    {"zip"      ,	"application/zip"                                                           },
+    {"3gp"      ,	"video/3gpp"                                                                },
+    {"3g2"      ,	"video/3gpp2"                                                               },
+    {"7z"       ,	"application/x-7z-compressed"                                               },
+};
 
 /// @brief Generates a response based on the requested resource.
 /// @param requested_resource Requested resource path.
 /// @param httpResponse String object in which HTTP response is meant to be stored.
 /// @param resource_extension File extension of resource to be sent.
 /// @return HTTP response size in bytes.
-unsigned long int HttpGenerateResponse(const std::string& requested_resource, std::string& httpResponse, const std::string& resource_extension)
+unsigned long int HttpGenerateResponse(const std::string& requested_resource, std::string& httpResponse)
 {
     std::string resource_file;
+    const std::string resource_extension = HttpGetFileExtension(requested_resource);
     int get_html = HttpCopyFileToString(requested_resource, resource_file);
     if(get_html < 0)
         return get_html;
 
-    httpResponse = "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: " + HttpDefineContentType(resource_extension) + "\r\n"
-                    "Content-Length: " +  std::to_string(resource_file.size()) + "\r\n"
+    httpResponse =  "HTTP/1.1 200 OK\r\n"
+                    "Content-Type: "        +  extension_to_content_type[resource_extension]    + "\r\n"
+                    "Content-Length: "      +  std::to_string(resource_file.size())             + "\r\n"
                     "\r\n" +
                     resource_file;
 
@@ -374,17 +446,11 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 /// @return < 0 if any error happened, > 0 if want to interact again, 0 otherwise.
 int HttpServerRun(int client_socket)
 {
-    // First, try to read something from client.
-    std::string read_from_client;
-    int end_connection = HttpReadFromClient(client_socket, read_from_client);
-    
-    // If client got disconnected while trying to read, end_connection > 0.
-    // In that case, exit and wait for an incoming connection to happen again.
-    if(end_connection)
-        return 0;
-    
-    // Once something has been read, process the request. Erase the current request string afterwards,
-    // leaving enough space for potential incoming requests.
+    // bool keep_interacting       = true              ;
+    // HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
+    std::string read_from_client                    ;
+    std::string httpResponse                        ;
+
     std::map<std::string, std::string> request_fields =
     {
         {"Method"                       , ""},
@@ -401,17 +467,58 @@ int HttpServerRun(int client_socket)
         {"Accept-Language"              , ""},
     };
 
+    // while(keep_interacting)
+    // {
+    //     switch(http_run_fsm)
+    //     {
+    //         case HTTP_RUN_FSM_READ:
+    //         {
+                
+    //         }
+    //         break;
+
+    //         case HTTP_RUN_FSM_PROCESS_REQUEST:
+    //         {
+
+    //         }
+    //         break;
+
+    //         case HTTP_RUN_FSM_GENERATE_RESPONSE:
+    //         {
+
+    //         }
+    //         break;
+
+    //         case HTTP_RUN_FSM_WRITE:
+    //         {
+
+    //         }
+    //         break;
+
+    //         case HTTP_RUN_FSM_END_CONNECTION:
+    //         {
+    //             keep_interacting = false;
+    //         }
+    //         break;
+    //     }
+    // }
+
+    // First, try to read something from client.
+    int end_connection = HttpReadFromClient(client_socket, read_from_client);
+    
+    // If client got disconnected while trying to read, end_connection > 0.
+    // In that case, exit and wait for an incoming connection to happen again.
+    if(end_connection)
+        return 0;
+    
+    // Once something has been read, process the request. Erase the current request string afterwards,
+    // leaving enough space for potential incoming requests.
     HttpProcessRequest(read_from_client, request_fields);
     if(request_fields["Method"].empty() || request_fields["Requested resource"].empty() || request_fields["Protocol"].empty())
         return 0;
-    read_from_client.clear();
-
-    std::string resource_extension = HttpGetFileExtension(request_fields["Requested resource"]);
-    LOG_ERR("resource_extension = %s", resource_extension.c_str());
 
     // After processing the request, generate a proper response.
-    std::string httpResponse;
-    unsigned long int response_size = HttpGenerateResponse(request_fields["Requested resource"], httpResponse, resource_extension);
+    unsigned long int response_size = HttpGenerateResponse(request_fields["Requested resource"], httpResponse);
 
     // If response could not be generated, exit and wait for an incoming connection to happen again.
     if(response_size < 0)
@@ -423,7 +530,5 @@ int HttpServerRun(int client_socket)
     if(write_to_client < 0)
         return 0;
 
-    // JMS TESTING. 1 makes the function keep interacting, whereas 0 send the TCP socket back to the ACCEPT state.
     return 1;
-    // return 0;
 }
