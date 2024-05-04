@@ -446,8 +446,8 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 /// @return < 0 if any error happened, > 0 if want to interact again, 0 otherwise.
 int HttpServerRun(int client_socket)
 {
-    // bool keep_interacting       = true              ;
-    // HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
+    bool keep_interacting       = true              ;
+    HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
     std::string read_from_client                    ;
     std::string httpResponse                        ;
 
@@ -467,68 +467,73 @@ int HttpServerRun(int client_socket)
         {"Accept-Language"              , ""},
     };
 
-    // while(keep_interacting)
-    // {
-    //     switch(http_run_fsm)
-    //     {
-    //         case HTTP_RUN_FSM_READ:
-    //         {
+    while(keep_interacting)
+    {
+        switch(http_run_fsm)
+        {
+            // First, try to read something from client.
+            // If client got disconnected while trying to read or any error happened, end_connection > 0.
+            // In that case, exit and wait for an incoming connection to happen again.
+            case HTTP_RUN_FSM_READ:
+            {
+                int end_connection = HttpReadFromClient(client_socket, read_from_client);
                 
-    //         }
-    //         break;
+                if(end_connection)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_PROCESS_REQUEST;
+            }
+            break;
 
-    //         case HTTP_RUN_FSM_PROCESS_REQUEST:
-    //         {
+            // Once something has been read, process the request. Erase the current request string afterwards,
+            // leaving enough space for potential incoming requests.
+            case HTTP_RUN_FSM_PROCESS_REQUEST:
+            {
+                HttpProcessRequest(read_from_client, request_fields);
+                
+                if(request_fields["Method"].empty() || request_fields["Requested resource"].empty() || request_fields["Protocol"].empty())
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
+            }
+            break;
 
-    //         }
-    //         break;
+            // After processing the request, generate a proper response.
+            case HTTP_RUN_FSM_GENERATE_RESPONSE:
+            {
+                unsigned long int response_size = HttpGenerateResponse(request_fields["Requested resource"], httpResponse);
 
-    //         case HTTP_RUN_FSM_GENERATE_RESPONSE:
-    //         {
+                // If response could not be generated, exit and wait for an incoming connection to happen again.
+                if(response_size < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_WRITE;
+            }
+            break;
 
-    //         }
-    //         break;
+            // Finally, send the generated response back to the client.
+            // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
+            case HTTP_RUN_FSM_WRITE:
+            {
+                int write_to_client = HttpWriteToClient(client_socket, httpResponse);
 
-    //         case HTTP_RUN_FSM_WRITE:
-    //         {
+                if(write_to_client < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_READ;
+            }
+            break;
 
-    //         }
-    //         break;
+            case HTTP_RUN_FSM_END_CONNECTION:
+            {
+                keep_interacting = false;
+            }
+            break;
 
-    //         case HTTP_RUN_FSM_END_CONNECTION:
-    //         {
-    //             keep_interacting = false;
-    //         }
-    //         break;
-    //     }
-    // }
+            default:
+            break;
+        }
+    }
 
-    // First, try to read something from client.
-    int end_connection = HttpReadFromClient(client_socket, read_from_client);
-    
-    // If client got disconnected while trying to read, end_connection > 0.
-    // In that case, exit and wait for an incoming connection to happen again.
-    if(end_connection)
-        return 0;
-    
-    // Once something has been read, process the request. Erase the current request string afterwards,
-    // leaving enough space for potential incoming requests.
-    HttpProcessRequest(read_from_client, request_fields);
-    if(request_fields["Method"].empty() || request_fields["Requested resource"].empty() || request_fields["Protocol"].empty())
-        return 0;
-
-    // After processing the request, generate a proper response.
-    unsigned long int response_size = HttpGenerateResponse(request_fields["Requested resource"], httpResponse);
-
-    // If response could not be generated, exit and wait for an incoming connection to happen again.
-    if(response_size < 0)
-        return 0;
-
-    // Finally, send the generated response back to the client.
-    int write_to_client = HttpWriteToClient(client_socket, httpResponse);
-    // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
-    if(write_to_client < 0)
-        return 0;
-
-    return 1;
+    return 0;
 }
