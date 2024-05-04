@@ -24,12 +24,20 @@
 /********* Define statements ********/
 /************************************/
 
-#define HTTP_SERVER_LEN_RX_BUFFER             8192    // RX buffer size.
-#define HTTP_SERVER_LEN_TX_BUFFER             8192    // TX buffer size.
+#define HTTP_SERVER_LEN_RX_BUFFER               8192        // RX buffer size.
+#define HTTP_SERVER_LEN_TX_BUFFER               8192        // TX buffer size.
+#define HTTP_SERVER_HTTP_MSG_END                "\r\n\r\n"
+#define HTTP_SERVER_DEFAULT_PAGE                "/index.html"
+#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE      "/page_not_found.html"
 
-#define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT     "Data read from client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT    "Data written to client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_CLIENT_DISCONNECTED       "Client with IP <%s> disconnected."
+#define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT   "Data read from client: <\r\n%s\r\n>"
+#define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT  "Data written to client: <\r\n%s\r\n>"
+#define HTTP_SERVER_MSG_CLIENT_DISCONNECTED     "Client with IP <%s> disconnected."
+#define HTTP_SERVER_MSG_ERROR_WHILE_READING     "ERROR WHILE READING"
+#define HTTP_SERVER_MSG_READ_TMT_EXPIRED        "READ TIMEOUT EXPIRED!"
+#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD      "Unknown field: "
+#define HTTP_SERVER_MSG_OPENING_FILE            "Error opening file \"%s\"."
+#define HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE    "UNKNOWN CONTENT TYPE (File extension: %s)"
 
 /************************************/
 
@@ -39,268 +47,7 @@
 
 static std::string path_to_resources;
 
-typedef enum
-{
-    HTTP_READ_FSM_READ_TRY              = 0 ,
-    HTTP_READ_FSM_CLIENT_DISCONNECTED       ,
-    HTTP_READ_FSM_ADD_TO_READ_DATA          ,
-    HTTP_READ_FSM_READ_END                  ,
-} HTTP_READ_FSM;
-
-typedef enum
-{
-    HTTP_RUN_FSM_READ               = 0 ,
-    HTTP_RUN_FSM_PROCESS_REQUEST        ,
-    HTTP_RUN_FSM_GENERATE_RESPONSE      ,
-    HTTP_RUN_FSM_WRITE                  ,
-    HTTP_RUN_FSM_END_CONNECTION         ,
-} HTTP_RUN_FSM;
-
-/************************************/
-
-bool HttpCheckRequestEnd(std::string& request)
-{
-    // Check first whether or not is the request message long enough.
-    if (request.length() < 4)
-        return false;
-    
-    std::string end = request.substr(request.length() - 4); // Extract last 4 characters
-    
-    return (end == "\r\n\r\n");
-}
-
-/// @brief WIP
-/// @param client_socket 
-/// @param read_from_client 
-/// @return 
-int HttpReadFromClient(int& client_socket, std::string& read_from_client)
-{
-    char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
-    HTTP_READ_FSM http_read_fsm = HTTP_READ_FSM_READ_TRY;
-    ssize_t read_from_socket = -1;
-    bool keep_trying = true;
-    int end_connection = 1;
-    char client_IP_addr[INET_ADDRSTRLEN] = {};
-
-    memset(rx_buffer, 0, sizeof(rx_buffer));
-    read_from_client.clear();
-    ServerSocketGetClientIPv4(client_socket, client_IP_addr);
-
-    while(keep_trying)
-    {
-        switch(http_read_fsm)
-        {
-            case HTTP_READ_FSM_READ_TRY:
-            {
-                read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
-
-                if(read_from_socket == 0)
-                {
-                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-                    end_connection = 1;
-                    http_read_fsm = HTTP_READ_FSM_READ_END;
-                }
-                else if(read_from_socket > 0)
-                {
-                    end_connection = 0;
-                    http_read_fsm = HTTP_READ_FSM_ADD_TO_READ_DATA;
-                }
-                else // read_from_socket < 0
-                {
-                    if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
-                        LOG_ERR("ERROR WHILE READING");
-                    
-                    LOG_WNG("TIMEOUT EXPIRED!");
-                    end_connection = 1;
-                    http_read_fsm = HTTP_READ_FSM_READ_END;
-                }
-            }
-            break;
-
-            case HTTP_READ_FSM_ADD_TO_READ_DATA:
-            {
-                read_from_client += rx_buffer;
-                memset(rx_buffer, 0, read_from_socket);
-
-                if(HttpCheckRequestEnd(read_from_client))
-                {
-                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
-                    http_read_fsm = HTTP_READ_FSM_READ_END;
-                }
-                else
-                    http_read_fsm = HTTP_READ_FSM_READ_TRY;
-            }
-            break;
-
-            case HTTP_READ_FSM_READ_END:
-            {
-                keep_trying = false;
-            }
-            break;
-
-            default:
-            break;
-        }
-    }   
-
-    return end_connection;
-}
-
-/// @brief Processes first line of message received from the client.
-/// @param input First line of message received from the client.
-/// @return String vector including method, requested resource and protocol (in that specific order).
-std::vector<std::string> HttpExtractWordsFromReqLine(const std::string& input)
-{
-    std::vector<std::string> words;
-    std::istringstream iss(input);
-    std::string word;
-
-    while (iss >> word) {
-        words.push_back(word);
-    }
-
-    return words;
-}
-
-/// @brief Processes HTTP request message received from the client.
-/// @param read_from_client HTTP request message received from the client.
-/// @param request_fields Map to be filled with fields received within client's HTTP request message.
-void HttpProcessRequest(const std::string&read_from_client, std::map<std::string, std::string>& request_fields)
-{
-    // Process every line within the request except for the first one (it has already been analysed).
-    std::string line;
-    std::istringstream iss(read_from_client);
-    
-    std::getline(iss, line);
-    if(!line.empty() && line[line.size() - 1] == '\n')
-        line.erase(line.size() - 1);
-    if(!line.empty() && line[line.size() - 1] == '\r')
-        line.erase(line.size() - 1);
-
-    std::vector<std::string> words_from_req_line = HttpExtractWordsFromReqLine(line);
-
-    if(words_from_req_line[1] == "" || words_from_req_line[1] == "/")
-        words_from_req_line[1] = "/index.html";
-
-    LOG_INF("METHOD:    %s", words_from_req_line[0].c_str());
-    LOG_INF("RESOURCE:  %s", words_from_req_line[1].c_str());
-    LOG_INF("PROTOCOL:  %s", words_from_req_line[2].c_str());
-
-    request_fields["Method"]                = words_from_req_line[0];
-    request_fields["Requested resource"]    = words_from_req_line[1];
-    request_fields["Protocol"]              = words_from_req_line[2];
-
-    while(std::getline(iss, line))
-    {
-        size_t pos = line.find(": ");
-        std::string key;
-        std::string value;
-        
-        if(!line.empty() && line[line.size() - 1] == '\n')
-            line.erase(line.size() - 1);
-        if(!line.empty() && line[line.size() - 1] == '\r')
-            line.erase(line.size() - 1);
-
-        if(line.empty())
-            continue;
-
-        // If ": " found, split the line into two parts
-        if (pos != std::string::npos)
-        {
-            key     = line.substr(0, pos);  // Before ": "
-            value   = line.substr(pos + 2); // After ": "
-        }
-
-        if(request_fields.count(key) != 0)
-            request_fields[key] = value;
-        else
-            LOG_WNG("Unknown field: ", value.c_str());
-    }
-}
-
-/// @brief Returns file's extension.
-/// @param text Requested resource name.
-/// @return Empty string if no extension could be found, file extension if everything is okay.
-std::string HttpGetFileExtension(const std::string& text)
-{
-    size_t dotPosition = text.find_last_of('.');
-    if (dotPosition != std::string::npos && dotPosition < text.length() - 1)
-        return text.substr(dotPosition + 1);
-    
-    // No dot found or dot is the last character
-    return "";
-}
-
-/// @brief Sets path to directory in which resources are stored.
-/// @param path Path to directory in which resources are stored.
-void HttpSetPathToResources(char* path)
-{
-    path_to_resources = path;
-}
-
-/// @brief Gets path to directory in which resources are stored.
-/// @return Path to directory in which resources are stored.
-std::string HttpGetPathToResources(void)
-{
-    return path_to_resources;
-}
-
-/// @brief Checks whether or not does the file exist.
-/// @param filePath File to be checked.
-/// @return True if file exists, false otherwise.
-bool fileExists(const std::string& filePath)
-{
-    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
-}
-
-/// @brief Copies requested resource (if found) to string.
-/// @param requested_resource Requested resource path.
-/// @param dest String in which requested resource is meant to be copied.
-/// @return < 0 if file could not be found nor opened, 0 is no error happened.
-int HttpCopyFileToString(const std::string& requested_resource, std::string& dest)
-{
-    // Create a modifiable copy of the requested resource
-    std::string requested_resource_name = requested_resource;
-    
-    // If no resource has been specified, then return the index page by default.
-    if(requested_resource_name == "" || requested_resource_name == "/")
-        requested_resource_name = "/index.html";
-    
-    std::string path_to_requested_resource;
-
-    if(fileExists(HttpGetPathToResources() + requested_resource_name))
-        path_to_requested_resource = HttpGetPathToResources() + requested_resource_name;
-    else
-        path_to_requested_resource = HttpGetPathToResources() + "/page_not_found.html";
-
-    std::ifstream file(path_to_requested_resource); // Open the file
-
-    // If not even the 404 error page could be found, then an error sould be returned.
-    if (!file.is_open())
-    {
-        LOG_ERR("Error opening file \"%s\".", path_to_requested_resource.c_str());
-        return -101;
-    }
-
-    // Read the file content into an std::string
-    dest.assign((   std::istreambuf_iterator<char>(file))   ,
-                    std::istreambuf_iterator<char>())       ;
-
-    // // Replace '\n' with "\r\n"
-    // size_t pos = 0;
-    // while ((pos = dest.find('\n', pos)) != std::string::npos)
-    // {
-    //     dest.replace(pos, 1, "\r\n");
-    //     pos += 2; // Move past the inserted "\r\n"
-    // }
-
-    // Close the file
-    file.close();
-
-    return 0;
-}
-
-std::map<std::string, std::string> extension_to_content_type =
+const std::map<const std::string, const std::string> extension_to_content_type =
 {
     {"aac"      ,	"audio/aac"                                                                 },
     {"abw"      ,	"application/x-abiword"                                                     },
@@ -381,22 +128,327 @@ std::map<std::string, std::string> extension_to_content_type =
     {"7z"       ,	"application/x-7z-compressed"                                               },
 };
 
+/************************************/
+
+/************************************/
+/********* Type definitions *********/
+/************************************/
+
+typedef enum
+{
+    HTTP_READ_FSM_READ_TRY              = 0 ,
+    HTTP_READ_FSM_CLIENT_DISCONNECTED       ,
+    HTTP_READ_FSM_ADD_TO_READ_DATA          ,
+    HTTP_READ_FSM_READ_END                  ,
+} HTTP_READ_FSM;
+
+typedef enum
+{
+    HTTP_WRITE_FSM_WRITE_TRY        = 0 ,
+    HTTP_WRITE_FSM_WRITE_END            ,
+} HTTP_WRITE_FSM;
+
+typedef enum
+{
+    HTTP_RUN_FSM_READ               = 0 ,
+    HTTP_RUN_FSM_PROCESS_REQUEST        ,
+    HTTP_RUN_FSM_GENERATE_RESPONSE      ,
+    HTTP_RUN_FSM_WRITE                  ,
+    HTTP_RUN_FSM_END_CONNECTION         ,
+} HTTP_RUN_FSM;
+
+/************************************/
+
+bool HttpCheckRequestEnd(std::string& request)
+{
+    // Check first whether or not is the request message long enough.
+    if (request.length() < 4)
+        return false;
+    
+    std::string end = request.substr(request.length() - 4); // Extract last 4 characters
+    
+    return (end == HTTP_SERVER_HTTP_MSG_END);
+}
+
+/// @brief WIP
+/// @param client_socket 
+/// @param read_from_client 
+/// @return 
+int HttpReadFromClient(int& client_socket, std::string& read_from_client)
+{
+    char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
+    HTTP_READ_FSM http_read_fsm = HTTP_READ_FSM_READ_TRY;
+    ssize_t read_from_socket = -1;
+    bool keep_trying = true;
+    int keep_connected = 0;
+    char client_IP_addr[INET_ADDRSTRLEN] = {};
+
+    memset(rx_buffer, 0, sizeof(rx_buffer));
+    read_from_client.clear();
+    ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+
+    while(keep_trying)
+    {
+        switch(http_read_fsm)
+        {
+            case HTTP_READ_FSM_READ_TRY:
+            {
+                read_from_socket = SERVER_SOCKET_READ(client_socket, rx_buffer);
+
+                if(read_from_socket == 0)
+                {
+                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+                    keep_connected = -1;
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
+                }
+                else if(read_from_socket > 0)
+                {
+                    keep_connected = 0;
+                    http_read_fsm = HTTP_READ_FSM_ADD_TO_READ_DATA;
+                }
+                else // read_from_socket < 0
+                {
+                    if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
+                        LOG_ERR(HTTP_SERVER_MSG_ERROR_WHILE_READING);
+                    
+                    LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                    keep_connected = -1;
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
+                }
+            }
+            break;
+
+            case HTTP_READ_FSM_ADD_TO_READ_DATA:
+            {
+                read_from_client += rx_buffer;
+                memset(rx_buffer, 0, read_from_socket);
+
+                if(HttpCheckRequestEnd(read_from_client))
+                {
+                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+                    http_read_fsm = HTTP_READ_FSM_READ_END;
+                }
+                else
+                    http_read_fsm = HTTP_READ_FSM_READ_TRY;
+            }
+            break;
+
+            case HTTP_READ_FSM_READ_END:
+            {
+                keep_trying = false;
+            }
+            break;
+
+            default:
+            break;
+        }
+    }   
+
+    return keep_connected;
+}
+
+/// @brief Processes first line of message received from the client.
+/// @param input First line of message received from the client.
+/// @return String vector including method, requested resource and protocol (in that specific order).
+std::vector<std::string> HttpExtractWordsFromReqLine(const std::string& input)
+{
+    std::vector<std::string> words;
+    std::istringstream iss(input);
+    std::string word;
+
+    while (iss >> word)
+        words.push_back(word);
+
+    return words;
+}
+
+/// @brief Processes HTTP request message received from the client.
+/// @param read_from_client HTTP request message received from the client.
+/// @param request_fields Map to be filled with fields received within client's HTTP request message.
+/// @return 0 if everything went OK, < 0 if any of the mandatory field in the first request line is empty.
+int HttpProcessRequest(const std::string&read_from_client, std::map<const std::string, std::string>& request_fields)
+{
+    // Process every line within the request except for the first one (it has already been analysed).
+    std::string line;
+    std::istringstream iss(read_from_client);
+    
+    std::getline(iss, line);
+    if(!line.empty() && line[line.size() - 1] == '\n')
+        line.erase(line.size() - 1);
+    if(!line.empty() && line[line.size() - 1] == '\r')
+        line.erase(line.size() - 1);
+
+    std::vector<std::string> words_from_req_line = HttpExtractWordsFromReqLine(line);
+
+    LOG_INF("METHOD:    %s", words_from_req_line[0].c_str());
+    LOG_INF("RESOURCE:  %s", words_from_req_line[1].c_str());
+    LOG_INF("PROTOCOL:  %s", words_from_req_line[2].c_str());
+
+    request_fields.at("Method")             = words_from_req_line[0];
+    request_fields.at("Requested resource") = words_from_req_line[1];
+    request_fields.at("Protocol")           = words_from_req_line[2];
+
+    if(request_fields.at("Method").empty() || request_fields.at("Requested resource").empty() || request_fields.at("Protocol").empty())
+        return -1;
+
+    while(std::getline(iss, line))
+    {
+        size_t pos = line.find(": ");
+        std::string key;
+        std::string value;
+        
+        if(!line.empty() && line[line.size() - 1] == '\n')
+            line.erase(line.size() - 1);
+        if(!line.empty() && line[line.size() - 1] == '\r')
+            line.erase(line.size() - 1);
+
+        if(line.empty())
+            continue;
+
+        // If ": " found, split the line into two parts
+        if (pos != std::string::npos)
+        {
+            key     = line.substr(0, pos);  // Before ": "
+            value   = line.substr(pos + 2); // After ": "
+        }
+
+        if(request_fields.count(key) != 0)
+            request_fields.at(key) = value;
+        else
+            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, value.c_str());
+    }
+
+    return 0;
+}
+
+/// @brief Returns file's extension.
+/// @param text Requested resource name.
+/// @return Empty string if no extension could be found, file extension if everything is okay.
+std::string HttpGetFileExtension(const std::string& text)
+{
+    size_t dotPosition = text.find_last_of('.');
+    if (dotPosition != std::string::npos && dotPosition < text.length() - 1)
+        return text.substr(dotPosition + 1);
+    
+    // No dot found or dot is the last character
+    return "";
+}
+
+/// @brief Sets path to directory in which resources are stored.
+/// @param path Path to directory in which resources are stored.
+void HttpSetPathToResources(char* path)
+{
+    path_to_resources = path;
+}
+
+/// @brief Gets path to directory in which resources are stored.
+/// @return Path to directory in which resources are stored.
+std::string HttpGetPathToResources(void)
+{
+    return path_to_resources;
+}
+
+/// @brief Checks whether or not does the file exist.
+/// @param filePath File to be checked.
+/// @return True if file exists, false otherwise.
+bool HttpFileExists(const std::string& filePath)
+{
+    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
+}
+
+const std::string HttpGetMIMEDataType(const std::string& content_type)
+{
+    size_t pos = content_type.find('/');
+
+    if (pos != std::string::npos)
+        return content_type.substr(0, pos);
+    else
+        return content_type;
+}
+
+/// @brief Copies requested resource (if found) to string.
+/// @param requested_resource Requested resource path.
+/// @param dest String in which requested resource is meant to be copied.
+/// @return < 0 if file could not be found nor opened, 0 is no error happened.
+int HttpCopyFileToString(const std::string& path_to_requested_resource, std::string& dest)
+{
+    std::ifstream file(path_to_requested_resource); // Open the file
+
+    // If not even the 404 error page could be found, then an error sould be returned.
+    if (!file.is_open())
+    {
+        LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, path_to_requested_resource.c_str());
+        return -101;
+    }
+
+    // Read the file content into an std::string
+    dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+
+    const std::string mime_data_type = HttpGetMIMEDataType(extension_to_content_type.at(HttpGetFileExtension(path_to_requested_resource)));
+
+    if(mime_data_type == "text")
+    {
+        // Replace '\n' with "\r\n"
+        size_t pos = 0;
+        while ((pos = dest.find('\n', pos)) != std::string::npos)
+        {
+            dest.replace(pos, 1, "\r\n");
+
+            // Move past the inserted "\r\n"
+            pos += 2;
+        }
+    }
+
+    // Close the file
+    file.close();
+
+    return 0;
+}
+
+const std::string HttpCheckResourceToSend(const std::string& requested_resource)
+{
+    std::string requested_resource_aux = std::string(requested_resource);
+
+    // If no resource has been specified, then return the index page by default.
+    if(requested_resource == "" || requested_resource == "/")
+        requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
+    
+    if(HttpFileExists(HttpGetPathToResources() + requested_resource_aux))
+        requested_resource_aux =  HttpGetPathToResources() + requested_resource_aux;
+    else
+        requested_resource_aux =  HttpGetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
+
+    return (const std::string)requested_resource_aux;
+}
+
 /// @brief Generates a response based on the requested resource.
 /// @param requested_resource Requested resource path.
 /// @param httpResponse String object in which HTTP response is meant to be stored.
-/// @param resource_extension File extension of resource to be sent.
 /// @return HTTP response size in bytes.
 unsigned long int HttpGenerateResponse(const std::string& requested_resource, std::string& httpResponse)
 {
     std::string resource_file;
-    const std::string resource_extension = HttpGetFileExtension(requested_resource);
-    int get_html = HttpCopyFileToString(requested_resource, resource_file);
+    std::string content_type ;
+
+    const std::string resource_to_send = HttpCheckResourceToSend(requested_resource);
+
+    try
+    {
+        content_type = std::string(extension_to_content_type.at(HttpGetFileExtension(resource_to_send)));
+    }
+    catch(const std::out_of_range& e)
+    {
+        LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, HttpGetFileExtension(resource_to_send).c_str());
+        return -1;
+    }
+
+    int get_html = HttpCopyFileToString(resource_to_send, resource_file);
     if(get_html < 0)
         return get_html;
 
     httpResponse =  "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: "        +  extension_to_content_type[resource_extension]    + "\r\n"
-                    "Content-Length: "      +  std::to_string(resource_file.size())             + "\r\n"
+                    "Content-Type: "        +  content_type                         + "\r\n"
+                    "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
                     "\r\n" +
                     resource_file;
 
@@ -411,34 +463,65 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 {
     unsigned long remaining_data_len    = httpResponse.size();
     unsigned long bytes_already_written = 0;
+    
+    HTTP_WRITE_FSM http_write_fsm = HTTP_WRITE_FSM_WRITE_TRY;
+    int end_connection = 0;
+    bool keep_trying = true;
 
-    while(remaining_data_len > 0)
+    while(keep_trying)
     {
-        long int socket_write = ServerSocketWrite(client_socket, httpResponse.data() + bytes_already_written, remaining_data_len);
-
-        if((socket_write < 0))
+        switch(http_write_fsm)
         {
-            if((errno != EAGAIN && errno != EWOULDBLOCK))
-                return -104;
-            
-            continue;
-        }
+            case HTTP_WRITE_FSM_WRITE_TRY:
+            {
+                long int socket_write = ServerSocketWrite(client_socket, httpResponse.data() + bytes_already_written, remaining_data_len);
 
-        if(socket_write == 0)
-        {
-            char client_IP_addr[INET_ADDRSTRLEN] = {};
-            ServerSocketGetClientIPv4(client_socket, client_IP_addr);
-            LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
-            return -105;
-        }
+                if((socket_write < 0))
+                {
+                    if((errno != EAGAIN && errno != EWOULDBLOCK))
+                    {
+                        end_connection = -104;
+                        http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
+                    }
+                }
+                else if(socket_write == 0)
+                {
+                    char client_IP_addr[INET_ADDRSTRLEN] = {};
+                    ServerSocketGetClientIPv4(client_socket, client_IP_addr);
+                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+                    
+                    end_connection = -105;
+                    http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
+                }
+                else // socket_write > 0
+                {
+                    bytes_already_written   += socket_write;
+                    remaining_data_len      -= socket_write;
 
-        bytes_already_written   += socket_write;
-        remaining_data_len      -= socket_write;
+                    // If no partial write has been detected, then jump to HTTP_WRITE_FSM_WRITE_END state.
+                    // Otherwise, keep writing.
+                    if(remaining_data_len == 0)
+                    {
+                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
+                        http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
+                        end_connection = 0;
+                    }
+                }
+            }
+            break;
+
+            case HTTP_WRITE_FSM_WRITE_END:
+            {
+                keep_trying = false;
+            }
+            break;
+
+            default:
+            break;
+        }
     }
 
-    LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
-    
-    return 0;
+    return end_connection;
 }
 
 /// @brief Reads from client, then sends a response.
@@ -451,7 +534,7 @@ int HttpServerRun(int client_socket)
     std::string read_from_client                    ;
     std::string httpResponse                        ;
 
-    std::map<std::string, std::string> request_fields =
+    std::map<const std::string, std::string> request_fields =
     {
         {"Method"                       , ""},
         {"Requested resource"           , ""},
@@ -478,7 +561,7 @@ int HttpServerRun(int client_socket)
             {
                 int end_connection = HttpReadFromClient(client_socket, read_from_client);
                 
-                if(end_connection)
+                if(end_connection < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
                 else
                     http_run_fsm = HTTP_RUN_FSM_PROCESS_REQUEST;
@@ -489,9 +572,10 @@ int HttpServerRun(int client_socket)
             // leaving enough space for potential incoming requests.
             case HTTP_RUN_FSM_PROCESS_REQUEST:
             {
-                HttpProcessRequest(read_from_client, request_fields);
+                int process_request = HttpProcessRequest(read_from_client, request_fields);
                 
-                if(request_fields["Method"].empty() || request_fields["Requested resource"].empty() || request_fields["Protocol"].empty())
+                // If request could not be processed properly, then stop interacting with the client.
+                if(process_request < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
                 else
                     http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
@@ -501,7 +585,7 @@ int HttpServerRun(int client_socket)
             // After processing the request, generate a proper response.
             case HTTP_RUN_FSM_GENERATE_RESPONSE:
             {
-                unsigned long int response_size = HttpGenerateResponse(request_fields["Requested resource"], httpResponse);
+                unsigned long int response_size = HttpGenerateResponse(request_fields.at("Requested resource"), httpResponse);
 
                 // If response could not be generated, exit and wait for an incoming connection to happen again.
                 if(response_size < 0)
