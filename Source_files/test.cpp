@@ -527,7 +527,7 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
 /// @brief Reads from client, then sends a response.
 /// @param client_socket Client socket.
 /// @return < 0 if any error happened, > 0 if want to interact again, 0 otherwise.
-int HttpServerRun(int client_socket)
+int HttpServerInteractFn(int client_socket)
 {
     bool keep_interacting       = true              ;
     HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
