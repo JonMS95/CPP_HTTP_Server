@@ -18,7 +18,7 @@ void HttpSetPathToResources(char* path);
 /// @brief Reads from client, then sends a response.
 /// @param client_socket Client socket.
 /// @return < 0 if any error happened, 0 otherwise.
-int HttpServerRun(int client_socket);
+int HttpServerInteractFn(int client_socket);
 
 /*************************************/
 
