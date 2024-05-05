@@ -44,7 +44,7 @@
 #define NON_BLOCKING_CHAR                   'n'
 #define NON_BLOCKING_LONG                   "NonBlocking"
 #define NON_BLOCKING_DETAIL                 "Non blocking socket."
-#define NON_BLOCKING_DEFAULT_VALUE          true
+#define NON_BLOCKING_DEFAULT_VALUE          false
 
 /********* Secure connection *********/
 
@@ -161,7 +161,7 @@ int main(int argc, char** argv)
 
     HttpSetPathToResources(path_resources);
 
-    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, false, secure_connection, path_cert, path_pkey, HttpServerRun);
+    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, non_blocking, secure_connection, path_cert, path_pkey, HttpServerInteractFn);
 
     return 0;
 }
