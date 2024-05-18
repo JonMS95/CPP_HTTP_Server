@@ -24,20 +24,25 @@
 /********* Define statements ********/
 /************************************/
 
-#define HTTP_SERVER_LEN_RX_BUFFER               8192        // RX buffer size.
-#define HTTP_SERVER_LEN_TX_BUFFER               8192        // TX buffer size.
-#define HTTP_SERVER_HTTP_MSG_END                "\r\n\r\n"
-#define HTTP_SERVER_DEFAULT_PAGE                "/index.html"
-#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE      "/page_not_found.html"
+#define HTTP_SERVER_LEN_RX_BUFFER                   8192        // RX buffer size.
+#define HTTP_SERVER_LEN_TX_BUFFER                   8192        // TX buffer size.
+#define HTTP_SERVER_HTTP_MSG_END                    "\r\n\r\n"
+#define HTTP_SERVER_DEFAULT_PAGE                    "/index.html"
+#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE          "/page_not_found.html"
 
-#define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT   "Data read from client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT  "Data written to client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_CLIENT_DISCONNECTED     "Client with IP <%s> disconnected."
-#define HTTP_SERVER_MSG_ERROR_WHILE_READING     "ERROR WHILE READING"
-#define HTTP_SERVER_MSG_READ_TMT_EXPIRED        "READ TIMEOUT EXPIRED!"
-#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD      "Unknown field: "
-#define HTTP_SERVER_MSG_OPENING_FILE            "Error opening file \"%s\"."
-#define HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE    "UNKNOWN CONTENT TYPE (File extension: %s)"
+#define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT       "Data read from client: <\r\n%s\r\n>"
+#define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT      "Data written to client: <\r\n%s\r\n>"
+#define HTTP_SERVER_MSG_CLIENT_DISCONNECTED         "Client with IP <%s> disconnected."
+#define HTTP_SERVER_MSG_ERROR_WHILE_READING         "ERROR WHILE READING"
+#define HTTP_SERVER_MSG_READ_TMT_EXPIRED            "READ TIMEOUT EXPIRED!"
+#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD          "Unknown field: "
+#define HTTP_SERVER_MSG_OPENING_FILE                "Error opening file \"%s\"."
+#define HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE        "UNKNOWN CONTENT TYPE (File extension: %s)"
+#define HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING    "One of the basic request fields (either method, requested resource or protocol) is missing."
+
+#define HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED    -1
+#define HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND    -2
+#define HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE       -3
 
 /************************************/
 
@@ -170,10 +175,10 @@ bool HttpCheckRequestEnd(std::string& request)
     return (end == HTTP_SERVER_HTTP_MSG_END);
 }
 
-/// @brief WIP
-/// @param client_socket 
-/// @param read_from_client 
-/// @return 
+/// @brief Tries to read from HTTP client.
+/// @param client_socket Target client socket.
+/// @param read_from_client String in which data read from client is meant to be stored.
+/// @return false if any error happened or client got disconnected, true otherwise.
 int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 {
     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
@@ -210,8 +215,9 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 {
                     if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
                         LOG_ERR(HTTP_SERVER_MSG_ERROR_WHILE_READING);
+                    else
+                        LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
                     
-                    LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
                     keep_connected = -1;
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
@@ -289,7 +295,10 @@ int HttpProcessRequest(const std::string&read_from_client, std::map<const std::s
     request_fields.at("Protocol")           = words_from_req_line[2];
 
     if(request_fields.at("Method").empty() || request_fields.at("Requested resource").empty() || request_fields.at("Protocol").empty())
-        return -1;
+    {
+        LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
+        return HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED;
+    }
 
     while(std::getline(iss, line))
     {
@@ -378,7 +387,7 @@ int HttpCopyFileToString(const std::string& path_to_requested_resource, std::str
     if (!file.is_open())
     {
         LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, path_to_requested_resource.c_str());
-        return -101;
+        return HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND;
     }
 
     // Read the file content into an std::string
@@ -439,7 +448,7 @@ unsigned long int HttpGenerateResponse(const std::string& requested_resource, st
     catch(const std::out_of_range& e)
     {
         LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, HttpGetFileExtension(resource_to_send).c_str());
-        return -1;
+        return HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
     }
 
     int get_html = HttpCopyFileToString(resource_to_send, resource_file);
