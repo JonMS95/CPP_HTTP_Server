@@ -46,6 +46,26 @@
 #define NON_BLOCKING_DETAIL                 "Non blocking socket."
 #define NON_BLOCKING_DEFAULT_VALUE          false
 
+/*********** Reuse address ***********/
+#define REUSE_ADDRESS_CHAR                  'a'
+#define REUSE_ADDRESS_LONG                  "ReuseAddress"
+#define REUSE_ADDRESS_DETAIL                "Reuse address."
+#define REUSE_ADDRESS_DEFAULT_VALUE         false
+
+/************ Reuse port *************/
+#define REUSE_PORT_CHAR                     'b'
+#define REUSE_PORT_LONG                     "ReusePort"
+#define REUSE_PORT_DETAIL                   "Reuse port."
+#define REUSE_PORT_DEFAULT_VALUE            false
+
+/********** Receive timeout **********/
+#define RX_TIMEOUT_CHAR                     't'
+#define RX_TIMEOUT_OPT_LONG                 "RXTimeout"
+#define RX_TIMEOUT_OPT_DETAIL               "Receive Timeout. Useless if non-blocking."
+#define RX_TIMEOUT_MIN_VALUE                0
+#define RX_TIMEOUT_MAX_VALUE                5000000             // 5 seconds
+#define RX_TIMEOUT_DEFAULT_VALUE            1000000
+
 /********* Secure connection *********/
 
 #define SECURE_CONN_CHAR                    's'
@@ -93,62 +113,85 @@ int main(int argc, char** argv)
     int max_clients_num     ;
     bool concurrency_enabled;
     bool non_blocking       ;
+    bool reuse_address      ;
+    bool reuse_port         ;
+    unsigned long rx_timeout;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
     char* path_resources = (char*)calloc(1024, 1);
 
-    SetOptionDefinitionInt( PORT_OPT_CHAR       ,
-                            PORT_OPT_LONG       ,
-                            PORT_OPT_DETAIL     ,
-                            PORT_MIN_VALUE      ,
-                            PORT_MAX_VALUE      ,
-                            PORT_DEFAULT_VALUE  ,
-                            &server_port        );
+    SetOptionDefinitionInt(     PORT_OPT_CHAR                   ,
+                                PORT_OPT_LONG                   ,
+                                PORT_OPT_DETAIL                 ,
+                                PORT_MIN_VALUE                  ,
+                                PORT_MAX_VALUE                  ,
+                                PORT_DEFAULT_VALUE              ,
+                                &server_port                    );
 
-    SetOptionDefinitionInt( CLIENTS_OPT_CHAR        ,
-                            CLIENTS_OPT_LONG        ,
-                            CLIENTS_OPT_DETAIL      ,
-                            CLIENTS_MIN_VALUE       ,
-                            CLIENTS_MAX_VALUE       ,
-                            CLIENTS_DEFAULT_VALUE   ,
-                            &max_clients_num        );
+    SetOptionDefinitionInt(     CLIENTS_OPT_CHAR                ,
+                                CLIENTS_OPT_LONG                ,
+                                CLIENTS_OPT_DETAIL              ,
+                                CLIENTS_MIN_VALUE               ,
+                                CLIENTS_MAX_VALUE               ,
+                                CLIENTS_DEFAULT_VALUE           ,
+                                &max_clients_num                );
 
-    SetOptionDefinitionBool(SIMULTANEOUS_CONNS_CHAR         ,
-                            SIMULTANEOUS_CONNS_LONG         ,
-                            SIMULTANEOUS_CONNS_DETAIL       ,
-                            SIMULTANEOUS_CONNS_DEFAULT_VALUE,
-                            &concurrency_enabled            );
+    SetOptionDefinitionBool(    SIMULTANEOUS_CONNS_CHAR         ,
+                                SIMULTANEOUS_CONNS_LONG         ,
+                                SIMULTANEOUS_CONNS_DETAIL       ,
+                                SIMULTANEOUS_CONNS_DEFAULT_VALUE,
+                                &concurrency_enabled            );
 
-    SetOptionDefinitionBool(NON_BLOCKING_CHAR           ,
-                            NON_BLOCKING_LONG           ,
-                            NON_BLOCKING_DETAIL         ,
-                            NON_BLOCKING_DEFAULT_VALUE  ,
-                            &non_blocking               );
+    SetOptionDefinitionBool(    NON_BLOCKING_CHAR               ,
+                                NON_BLOCKING_LONG               ,
+                                NON_BLOCKING_DETAIL             ,
+                                NON_BLOCKING_DEFAULT_VALUE      ,
+                                &non_blocking                   );
 
-    SetOptionDefinitionBool(SECURE_CONN_CHAR            ,
-                            SECURE_CONN_LONG            ,
-                            SECURE_CONN_DETAIL          ,
-                            SECURE_CONN_DEFAULT_VALUE   ,
-                            &secure_connection          );
+    SetOptionDefinitionBool(    REUSE_ADDRESS_CHAR              ,
+                                REUSE_ADDRESS_LONG              ,
+                                REUSE_ADDRESS_DETAIL            ,
+                                REUSE_ADDRESS_DEFAULT_VALUE     ,
+                                &reuse_address                  );
 
-    SetOptionDefinitionStringNL(CERT_OPT_CHAR       ,
-                                CERT_OPT_LONG       ,
-                                CERT_OPT_DETAIL     ,
-                                CERT_DEFAULT_VALUE  ,
-                                path_cert           );
+    SetOptionDefinitionBool(    REUSE_PORT_CHAR                 ,
+                                REUSE_PORT_LONG                 ,
+                                REUSE_PORT_DETAIL               ,
+                                REUSE_PORT_DEFAULT_VALUE        ,
+                                &reuse_port                     );
 
-    SetOptionDefinitionStringNL(PKEY_OPT_CHAR       ,
-                                PKEY_OPT_LONG       ,
-                                PKEY_OPT_DETAIL     ,
-                                PKEY_DEFAULT_VALUE  ,
-                                path_pkey           );
+    SetOptionDefinitionInt(     RX_TIMEOUT_CHAR                 ,
+                                RX_TIMEOUT_OPT_LONG             ,
+                                RX_TIMEOUT_OPT_DETAIL           ,
+                                RX_TIMEOUT_MIN_VALUE            ,
+                                RX_TIMEOUT_MAX_VALUE            ,
+                                RX_TIMEOUT_DEFAULT_VALUE        ,
+                                &rx_timeout                     );
 
-    SetOptionDefinitionStringNL(RESOURCES_OPT_CHAR      ,
-                                RESOURCES_OPT_LONG      ,
-                                RESOURCES_OPT_DETAIL    ,
-                                RESOURCES_DEFAULT_VALUE ,
-                                path_resources          );
+    SetOptionDefinitionBool(    SECURE_CONN_CHAR                ,
+                                SECURE_CONN_LONG                ,
+                                SECURE_CONN_DETAIL              ,
+                                SECURE_CONN_DEFAULT_VALUE       ,
+                                &secure_connection              );
+
+    SetOptionDefinitionStringNL(CERT_OPT_CHAR                   ,
+                                CERT_OPT_LONG                   ,
+                                CERT_OPT_DETAIL                 ,
+                                CERT_DEFAULT_VALUE              ,
+                                path_cert                       );
+
+    SetOptionDefinitionStringNL(PKEY_OPT_CHAR                   ,
+                                PKEY_OPT_LONG                   ,
+                                PKEY_OPT_DETAIL                 ,
+                                PKEY_DEFAULT_VALUE              ,
+                                path_pkey                       );
+
+    SetOptionDefinitionStringNL(RESOURCES_OPT_CHAR              ,
+                                RESOURCES_OPT_LONG              ,
+                                RESOURCES_OPT_DETAIL            ,
+                                RESOURCES_DEFAULT_VALUE         ,
+                                path_resources                  );
 
     int parse_arguments = ParseOptions(argc, argv);
     if(parse_arguments < 0)
@@ -161,7 +204,17 @@ int main(int argc, char** argv)
 
     HttpSetPathToResources(path_resources);
 
-    ServerSocketRun(server_port, max_clients_num, concurrency_enabled, non_blocking, secure_connection, path_cert, path_pkey, HttpServerInteractFn);
+    ServerSocketRun(server_port         ,
+                    max_clients_num     ,
+                    concurrency_enabled ,
+                    non_blocking        ,
+                    reuse_address       ,
+                    reuse_port          ,
+                    rx_timeout          ,
+                    secure_connection   ,
+                    path_cert           ,
+                    path_pkey           ,
+                    HttpServerInteractFn);
 
     return 0;
 }
