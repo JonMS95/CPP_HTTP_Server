@@ -16,4 +16,4 @@ echo
 echo "*******************************"
 echo "Testing 'main' executable file."
 echo "*******************************"
-./Tests/Executable_files/main -r ${DEFAULT_USER_PORT} -ab -t 1000
+./Tests/Executable_files/main -r ${DEFAULT_USER_PORT} -ab -t 100
