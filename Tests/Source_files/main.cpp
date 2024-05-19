@@ -119,7 +119,7 @@ int main(int argc, char** argv)
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
-    char* path_resources = (char*)calloc(1024, 1);
+    char* path_to_resources = (char*)calloc(1024, 1);
 
     SetOptionDefinitionInt(     PORT_OPT_CHAR                   ,
                                 PORT_OPT_LONG                   ,
@@ -191,7 +191,7 @@ int main(int argc, char** argv)
                                 RESOURCES_OPT_LONG              ,
                                 RESOURCES_OPT_DETAIL            ,
                                 RESOURCES_DEFAULT_VALUE         ,
-                                path_resources                  );
+                                path_to_resources               );
 
     int parse_arguments = ParseOptions(argc, argv);
     if(parse_arguments < 0)
@@ -202,19 +202,33 @@ int main(int argc, char** argv)
 
     LOG_INF("Arguments successfully parsed!");
 
-    HttpSetPathToResources(path_resources);
+    // HttpSetPathToResources(path_resources);
 
-    ServerSocketRun(server_port         ,
-                    max_clients_num     ,
-                    concurrency_enabled ,
-                    non_blocking        ,
-                    reuse_address       ,
-                    reuse_port          ,
-                    rx_timeout          ,
-                    secure_connection   ,
-                    path_cert           ,
-                    path_pkey           ,
-                    HttpServerInteractFn);
+    // ServerSocketRun(server_port         ,
+    //                 max_clients_num     ,
+    //                 concurrency_enabled ,
+    //                 non_blocking        ,
+    //                 reuse_address       ,
+    //                 reuse_port          ,
+    //                 rx_timeout          ,
+    //                 secure_connection   ,
+    //                 path_cert           ,
+    //                 path_pkey           ,
+    //                 HttpServerInteractFn);
+
+    HttpServer server
+    (
+        server_port         ,
+        max_clients_num     ,
+        concurrency_enabled ,
+        rx_timeout          ,
+        secure_connection   ,
+        path_cert           ,
+        path_pkey           ,
+        path_to_resources
+    );
+
+    server.Run();
 
     return 0;
 }
