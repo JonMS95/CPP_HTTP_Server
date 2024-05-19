@@ -115,7 +115,7 @@ int main(int argc, char** argv)
     bool non_blocking       ;
     bool reuse_address      ;
     bool reuse_port         ;
-    unsigned long rx_timeout;
+    int rx_timeout          ;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
