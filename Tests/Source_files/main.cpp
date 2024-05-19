@@ -39,25 +39,6 @@
 #define SIMULTANEOUS_CONNS_DETAIL           "Enable concurrency."
 #define SIMULTANEOUS_CONNS_DEFAULT_VALUE    false
 
-/********* Non-blocking socket ********/
-
-#define NON_BLOCKING_CHAR                   'n'
-#define NON_BLOCKING_LONG                   "NonBlocking"
-#define NON_BLOCKING_DETAIL                 "Non blocking socket."
-#define NON_BLOCKING_DEFAULT_VALUE          false
-
-/*********** Reuse address ***********/
-#define REUSE_ADDRESS_CHAR                  'a'
-#define REUSE_ADDRESS_LONG                  "ReuseAddress"
-#define REUSE_ADDRESS_DETAIL                "Reuse address."
-#define REUSE_ADDRESS_DEFAULT_VALUE         false
-
-/************ Reuse port *************/
-#define REUSE_PORT_CHAR                     'b'
-#define REUSE_PORT_LONG                     "ReusePort"
-#define REUSE_PORT_DETAIL                   "Reuse port."
-#define REUSE_PORT_DEFAULT_VALUE            false
-
 /********** Receive timeout **********/
 #define RX_TIMEOUT_CHAR                     't'
 #define RX_TIMEOUT_OPT_LONG                 "RXTimeout"
@@ -112,9 +93,6 @@ int main(int argc, char** argv)
     int server_port         ;
     int max_clients_num     ;
     bool concurrency_enabled;
-    bool non_blocking       ;
-    bool reuse_address      ;
-    bool reuse_port         ;
     int rx_timeout          ;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
@@ -142,24 +120,6 @@ int main(int argc, char** argv)
                                 SIMULTANEOUS_CONNS_DETAIL       ,
                                 SIMULTANEOUS_CONNS_DEFAULT_VALUE,
                                 &concurrency_enabled            );
-
-    SetOptionDefinitionBool(    NON_BLOCKING_CHAR               ,
-                                NON_BLOCKING_LONG               ,
-                                NON_BLOCKING_DETAIL             ,
-                                NON_BLOCKING_DEFAULT_VALUE      ,
-                                &non_blocking                   );
-
-    SetOptionDefinitionBool(    REUSE_ADDRESS_CHAR              ,
-                                REUSE_ADDRESS_LONG              ,
-                                REUSE_ADDRESS_DETAIL            ,
-                                REUSE_ADDRESS_DEFAULT_VALUE     ,
-                                &reuse_address                  );
-
-    SetOptionDefinitionBool(    REUSE_PORT_CHAR                 ,
-                                REUSE_PORT_LONG                 ,
-                                REUSE_PORT_DETAIL               ,
-                                REUSE_PORT_DEFAULT_VALUE        ,
-                                &reuse_port                     );
 
     SetOptionDefinitionInt(     RX_TIMEOUT_CHAR                 ,
                                 RX_TIMEOUT_OPT_LONG             ,
@@ -201,20 +161,6 @@ int main(int argc, char** argv)
     }
 
     LOG_INF("Arguments successfully parsed!");
-
-    // HttpSetPathToResources(path_resources);
-
-    // ServerSocketRun(server_port         ,
-    //                 max_clients_num     ,
-    //                 concurrency_enabled ,
-    //                 non_blocking        ,
-    //                 reuse_address       ,
-    //                 reuse_port          ,
-    //                 rx_timeout          ,
-    //                 secure_connection   ,
-    //                 path_cert           ,
-    //                 path_pkey           ,
-    //                 HttpServerInteractFn);
 
     HttpServer server
     (
