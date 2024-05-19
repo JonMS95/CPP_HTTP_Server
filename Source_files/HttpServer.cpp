@@ -505,7 +505,7 @@ int HttpServer::Run()
 {
     interact_callback = std::bind(&HttpServer::InteractFn, this, std::placeholders::_1);
 
-     return ServerSocketRun(this->server_port           ,
+    return ServerSocketRun( this->server_port           ,
                             this->max_clients_num       ,
                             this->concurrency_enabled   ,
                             this->non_blocking          ,
