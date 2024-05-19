@@ -5,48 +5,8 @@
 /******** Include statements ********/
 /************************************/
 
-/*************************************/
-
-/*************************************/
-/******** Function prototypes ********/
-/*************************************/
-
-/// @brief Set the path to resources to be provided by the web server.
-/// @param path Path to resources, established by the user.
-void HttpSetPathToResources(char* path);
-
-/// @brief Reads from client, then sends a response.
-/// @param client_socket Client socket.
-/// @return < 0 if any error happened, 0 otherwise.
-int HttpServerInteractFn(int client_socket);
-
-/*************************************/
-
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-/*************************************/
-
-/************************************/
-/******** Include statements ********/
-/************************************/
-
-#include <netinet/in.h>     // INET_ADDRSTRLEN.
-#include <arpa/inet.h>      // sockaddr_in, inet_addr
-#include <unistd.h>
-#include "SeverityLog_api.h"
-#include "ServerSocket_api.h"
-
 #include <string>
-#include <fstream>          // Read from file to string
 #include <vector>
-#include <sstream>
-#include <filesystem>
 #include <map>
 #include <functional>
 
