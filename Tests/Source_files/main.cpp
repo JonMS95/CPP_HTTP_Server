@@ -29,8 +29,8 @@
 #define CLIENTS_OPT_LONG                    "Clients"
 #define CLIENTS_OPT_DETAIL                  "Maximum number of clients."
 #define CLIENTS_MIN_VALUE                   1
-#define CLIENTS_MAX_VALUE                   3
-#define CLIENTS_DEFAULT_VALUE               1
+#define CLIENTS_MAX_VALUE                   100
+#define CLIENTS_DEFAULT_VALUE               3
 
 /********* Enable concurrency *********/
 
@@ -39,13 +39,21 @@
 #define SIMULTANEOUS_CONNS_DETAIL           "Enable concurrency."
 #define SIMULTANEOUS_CONNS_DEFAULT_VALUE    false
 
-/********** Receive timeout **********/
-#define RX_TIMEOUT_CHAR                     't'
-#define RX_TIMEOUT_OPT_LONG                 "RXTimeout"
-#define RX_TIMEOUT_OPT_DETAIL               "Receive Timeout. Useless if non-blocking."
-#define RX_TIMEOUT_MIN_VALUE                0
-#define RX_TIMEOUT_MAX_VALUE                5000000             // 5 seconds
-#define RX_TIMEOUT_DEFAULT_VALUE            1000000
+/********** Receive timeout (s) ******/
+#define RX_TIMEOUT_SECS_CHAR                't'
+#define RX_TIMEOUT_SECS_OPT_LONG            "RXTimeoutSecs"
+#define RX_TIMEOUT_SECS_OPT_DETAIL          "Receive Timeout in seconds."
+#define RX_TIMEOUT_SECS_MIN_VALUE           0
+#define RX_TIMEOUT_SECS_MAX_VALUE           3600    // 1 hour
+#define RX_TIMEOUT_SECS_DEFAULT_VALUE       600     // 10 minutes
+
+/********** Receive timeout (us) *****/
+#define RX_TIMEOUT_USECS_CHAR               'u'
+#define RX_TIMEOUT_USECS_OPT_LONG           "RXTimeoutUsecs"
+#define RX_TIMEOUT_USECS_OPT_DETAIL         "Receive Timeout in microseconds."
+#define RX_TIMEOUT_USECS_MIN_VALUE          0
+#define RX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
+#define RX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
 
 /********* Secure connection *********/
 
@@ -93,7 +101,8 @@ int main(int argc, char** argv)
     int server_port         ;
     int max_clients_num     ;
     bool concurrency_enabled;
-    int rx_timeout          ;
+    int rx_timeout_s        ;
+    int rx_timeout_us       ;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
@@ -121,13 +130,21 @@ int main(int argc, char** argv)
                                 SIMULTANEOUS_CONNS_DEFAULT_VALUE,
                                 &concurrency_enabled            );
 
-    SetOptionDefinitionInt(     RX_TIMEOUT_CHAR                 ,
-                                RX_TIMEOUT_OPT_LONG             ,
-                                RX_TIMEOUT_OPT_DETAIL           ,
-                                RX_TIMEOUT_MIN_VALUE            ,
-                                RX_TIMEOUT_MAX_VALUE            ,
-                                RX_TIMEOUT_DEFAULT_VALUE        ,
-                                &rx_timeout                     );
+    SetOptionDefinitionInt(     RX_TIMEOUT_SECS_CHAR            ,
+                                RX_TIMEOUT_SECS_OPT_LONG        ,
+                                RX_TIMEOUT_SECS_OPT_DETAIL      ,
+                                RX_TIMEOUT_SECS_MIN_VALUE       ,
+                                RX_TIMEOUT_SECS_MAX_VALUE       ,
+                                RX_TIMEOUT_SECS_DEFAULT_VALUE   ,
+                                &rx_timeout_s                   );
+
+    SetOptionDefinitionInt(     RX_TIMEOUT_USECS_CHAR           ,
+                                RX_TIMEOUT_USECS_OPT_LONG       ,
+                                RX_TIMEOUT_USECS_OPT_DETAIL     ,
+                                RX_TIMEOUT_USECS_MIN_VALUE      ,
+                                RX_TIMEOUT_USECS_MAX_VALUE      ,
+                                RX_TIMEOUT_USECS_DEFAULT_VALUE  ,
+                                &rx_timeout_us                  );
 
     SetOptionDefinitionBool(    SECURE_CONN_CHAR                ,
                                 SECURE_CONN_LONG                ,
@@ -162,19 +179,20 @@ int main(int argc, char** argv)
 
     LOG_INF("Arguments successfully parsed!");
 
-    HttpServer server
-    (
-        server_port         ,
-        max_clients_num     ,
-        concurrency_enabled ,
-        rx_timeout          ,
-        secure_connection   ,
-        path_cert           ,
-        path_pkey           ,
-        path_to_resources
-    );
+    HttpInteract::SetPathToResources(path_to_resources);
 
-    server.Run();
+    ServerSocketRun(server_port             ,
+                    max_clients_num         ,
+                    concurrency_enabled     ,
+                    false                   ,
+                    true                    ,
+                    true                    ,
+                    rx_timeout_s            ,
+                    rx_timeout_us           ,
+                    secure_connection       ,
+                    path_cert               ,
+                    path_pkey               ,
+                    HttpInteract::InteractFn);
 
     return 0;
 }
