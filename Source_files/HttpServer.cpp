@@ -18,33 +18,27 @@
 
 /*************************************/
 
+/************************************/
+/********* Define statements ********/
+/************************************/
+
+#define HTTP_SERVER_MSG_INTANCE_CREATED     "Created HttpServer object instance. Path to HTTP(S) server resources: %s."
+#define HTTP_SERVER_MSG_INTANCE_DESTROYED   "Destroyed HttpServer object instance with path to server resources: %s."
+
+/*************************************/
+
 /******************************************/
 /******** Class method definitions ********/
 /******************************************/
 
-HttpServer::HttpServer( unsigned int server_port        ,
-                        unsigned int max_clients_num    ,
-                        bool concurrency_enabled        ,
-                        unsigned long rx_timeout        ,
-                        bool secure_connection          ,
-                        std::string path_cert           ,
-                        std::string path_pkey           ,
-                        std::string path_to_resources   ):
-                        server_port(server_port)                ,
-                        max_clients_num(max_clients_num)        ,
-                        concurrency_enabled(concurrency_enabled),
-                        rx_timeout(rx_timeout)                  ,
-                        secure_connection(secure_connection)    ,
-                        path_cert(path_cert)                    ,
-                        path_pkey(path_pkey)                    ,
-                        path_to_resources(path_to_resources)
-                        {
-                            LOG_INF("Created HttpServer object instance.");
-                        }
+HttpServer::HttpServer(const std::string path_to_resources): path_to_resources(path_to_resources) 
+{
+    LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
+}
 
 HttpServer::~HttpServer()
 {
-    LOG_INF("Destroyed HttpServer object instance.");
+    LOG_INF(HTTP_SERVER_MSG_INTANCE_DESTROYED, this->GetPathToResources().c_str());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -84,10 +78,31 @@ int HttpServer::ReadFromClient(int& client_socket, std::string& read_from_client
                 }
                 else // read_from_socket < 0
                 {
-                    if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
-                        LOG_ERR(HTTP_SERVER_MSG_ERROR_WHILE_READING);
-                    else
-                        LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                    switch(errno)
+                    {
+                        // Firrst, let's fiñter well known errors, such as reset, abort or refusal messages sent by the peer.
+                        case ECONNABORTED:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNABORTED, errno);
+                        break;
+
+                        case ECONNRESET:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNRESET, errno);
+                        break;
+
+                        case ECONNREFUSED:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNREFUSED, errno);
+                        break;
+
+                        default:
+                        {
+                            // Other errors:
+                            if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
+                                LOG_WNG(HTTP_SERVER_MSG_ERROR_WHILE_READING, errno);
+                            else // Timeout expiral
+                                LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                        }
+                        break;
+                    }
                     
                     keep_connected = -1;
                     http_read_fsm = HTTP_READ_FSM_READ_END;
@@ -222,7 +237,7 @@ unsigned long int HttpServer::GenerateResponse(const std::string& requested_reso
 
     try
     {
-        content_type = std::string(extension_to_content_type.at(this->GetFileExtension(resource_to_send)));
+        content_type = std::string((*(this->ptr_extension_to_content)).at(this->GetFileExtension(resource_to_send)));
     }
     catch(const std::out_of_range& e)
     {
@@ -237,6 +252,7 @@ unsigned long int HttpServer::GenerateResponse(const std::string& requested_reso
     httpResponse =  "HTTP/1.1 200 OK\r\n"
                     "Content-Type: "        +  content_type                         + "\r\n"
                     "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
+                    "Connection: keep-alive\r\n"
                     "\r\n" +
                     resource_file;
 
@@ -251,12 +267,17 @@ const std::string HttpServer::CheckResourceToSend(const std::string& requested_r
     if(requested_resource == "" || requested_resource == "/")
         requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
     
-    if(this->FileExists(this->path_to_resources + requested_resource_aux))
-        requested_resource_aux =  this->path_to_resources + requested_resource_aux;
+    if(this->FileExists(this->GetPathToResources() + requested_resource_aux))
+        requested_resource_aux =  this->GetPathToResources() + requested_resource_aux;
     else
-        requested_resource_aux =  this->path_to_resources + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
+        requested_resource_aux =  this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
 
     return (const std::string)requested_resource_aux;
+}
+
+const std::string HttpServer::GetPathToResources(void)
+{
+    return this->path_to_resources;
 }
 
 bool HttpServer::FileExists(const std::string& filePath)
@@ -288,7 +309,7 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    const std::string mime_data_type = this->GetMIMEDataType(extension_to_content_type.at(this->GetFileExtension(path_to_requested_resource)));
+    const std::string mime_data_type = this->GetMIMEDataType((*(this->ptr_extension_to_content)).at(this->GetFileExtension(path_to_requested_resource)));
 
     if(mime_data_type == "text")
     {
@@ -371,6 +392,8 @@ int HttpServer::WriteToClient(int& client_socket, const std::string& httpRespons
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                         end_connection = 0;
                     }
+                    else
+                        LOG_WNG(HTTP_SERVER_MSG_PARTIAL_WRITE, bytes_already_written, remaining_data_len);
                 }
             }
             break;
@@ -389,12 +412,9 @@ int HttpServer::WriteToClient(int& client_socket, const std::string& httpRespons
     return end_connection;
 }
 
-/////////////////////////////////////////////////////////////////////////////////////////
+std::string HttpInteract::path_to_resources = "";
 
-/////////////////////////////////////////////////////////////////////////////////////////
-// Interact function to be binded
-
-int HttpServer::InteractFn(int client_socket)
+int HttpInteract::HttpServerFSM(HttpServer& http_server, int client_socket)
 {
     bool keep_interacting       = true              ;
     HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
@@ -426,7 +446,7 @@ int HttpServer::InteractFn(int client_socket)
             // In that case, exit and wait for an incoming connection to happen again.
             case HTTP_RUN_FSM_READ:
             {
-                int end_connection = this->ReadFromClient(client_socket, read_from_client);
+                int end_connection = http_server.ReadFromClient(client_socket, read_from_client);
                 
                 if(end_connection < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
@@ -439,7 +459,7 @@ int HttpServer::InteractFn(int client_socket)
             // leaving enough space for potential incoming requests.
             case HTTP_RUN_FSM_PROCESS_REQUEST:
             {
-                int process_request = this->ProcessRequest(read_from_client, request_fields);
+                int process_request = http_server.ProcessRequest(read_from_client, request_fields);
                 
                 // If request could not be processed properly, then stop interacting with the client.
                 if(process_request < 0)
@@ -452,7 +472,7 @@ int HttpServer::InteractFn(int client_socket)
             // After processing the request, generate a proper response.
             case HTTP_RUN_FSM_GENERATE_RESPONSE:
             {
-                unsigned long int response_size = this->GenerateResponse(request_fields.at("Requested resource"), httpResponse);
+                unsigned long int response_size = http_server.GenerateResponse(request_fields.at("Requested resource"), httpResponse);
 
                 // If response could not be generated, exit and wait for an incoming connection to happen again.
                 if(response_size < 0)
@@ -466,7 +486,7 @@ int HttpServer::InteractFn(int client_socket)
             // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
             case HTTP_RUN_FSM_WRITE:
             {
-                int write_to_client = this->WriteToClient(client_socket, httpResponse);
+                int write_to_client = http_server.WriteToClient(client_socket, httpResponse);
 
                 if(write_to_client < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
@@ -488,36 +508,5 @@ int HttpServer::InteractFn(int client_socket)
 
     return 0;
 }
-
-std::function<int(int)> HttpServer::interact_callback = nullptr;
-
-int HttpServer::StaticInteractFn(int client_socket)
-{
-    return interact_callback(client_socket);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
-
-/////////////////////////////////////////////////////////////////////////////////////////
-// Public function
-
-int HttpServer::Run()
-{
-    interact_callback = std::bind(&HttpServer::InteractFn, this, std::placeholders::_1);
-
-    return ServerSocketRun( this->server_port           ,
-                            this->max_clients_num       ,
-                            this->concurrency_enabled   ,
-                            this->non_blocking          ,
-                            this->reuse_address         ,
-                            this->reuse_port            ,
-                            this->rx_timeout            ,
-                            this->secure_connection     ,
-                            this->path_cert.c_str()     ,
-                            this->path_pkey.c_str()     ,
-                            HttpServer::StaticInteractFn);
-}
-
-/////////////////////////////////////////////////////////////////////////////////////////
 
 /******************************************/
