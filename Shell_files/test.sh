@@ -17,6 +17,6 @@ echo "*******************************"
 echo "Testing 'main' executable file."
 echo "*******************************"
 # # HTTP
-./Tests/Executable_files/main -r ${DEFAULT_USER_PORT} -t 1800 -p -m 10
+./Tests/Executable_files/main -r ${DEFAULT_USER_PORT} -t 1800 -p -m 10 -e "~/Desktop/scripts/HTML/HTML_tutorial"
 # # HTTPS
 # ./Tests/Executable_files/main -r ${DEFAULT_USER_PORT} -t 1800 -p -m 10 -s -c ~/Desktop/scripts/certificate_test/certificate.crt -k ~/Desktop/scripts/certificate_test/private.key
