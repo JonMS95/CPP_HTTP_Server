@@ -27,22 +27,6 @@ int HttpInteractHandler::HttpServerFSM(HttpServer& http_server, int client_socke
     std::string read_from_client                    ;
     std::string httpResponse                        ;
 
-    std::map<const std::string, std::string> request_fields =
-    {
-        {"Method"                       , ""},
-        {"Requested resource"           , ""},
-        {"Protocol"                     , ""},
-        {"Host"                         , ""},
-        {"Connection"                   , ""},
-        {"Cache-Control"                , ""},
-        {"Upgrade-Insecure-Requests"    , ""},
-        {"User-Agent"                   , ""},
-        {"Accept"                       , ""},
-        {"Referer"                      , ""},
-        {"Accept-Encoding"              , ""},
-        {"Accept-Language"              , ""},
-    };
-
     while(keep_interacting)
     {
         switch(http_run_fsm)
@@ -52,7 +36,7 @@ int HttpInteractHandler::HttpServerFSM(HttpServer& http_server, int client_socke
             // In that case, exit and wait for an incoming connection to happen again.
             case HTTP_RUN_FSM_READ:
             {
-                int end_connection = http_server.ReadFromClient(client_socket, read_from_client);
+                int end_connection = http_server.ReadFromClient(client_socket);
                 
                 if(end_connection < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
@@ -65,7 +49,7 @@ int HttpInteractHandler::HttpServerFSM(HttpServer& http_server, int client_socke
             // leaving enough space for potential incoming requests.
             case HTTP_RUN_FSM_PROCESS_REQUEST:
             {
-                int process_request = http_server.ProcessRequest(read_from_client, request_fields);
+                int process_request = http_server.ProcessRequest();
                 
                 // If request could not be processed properly, then stop interacting with the client.
                 if(process_request < 0)
@@ -78,7 +62,7 @@ int HttpInteractHandler::HttpServerFSM(HttpServer& http_server, int client_socke
             // After processing the request, generate a proper response.
             case HTTP_RUN_FSM_GENERATE_RESPONSE:
             {
-                unsigned long int response_size = http_server.GenerateResponse(request_fields.at("Requested resource"), httpResponse);
+                unsigned long int response_size = http_server.GenerateResponse();
 
                 // If response could not be generated, exit and wait for an incoming connection to happen again.
                 if(response_size < 0)
@@ -92,7 +76,7 @@ int HttpInteractHandler::HttpServerFSM(HttpServer& http_server, int client_socke
             // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
             case HTTP_RUN_FSM_WRITE:
             {
-                int write_to_client = http_server.WriteToClient(client_socket, httpResponse);
+                int write_to_client = http_server.WriteToClient(client_socket);
 
                 if(write_to_client < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
