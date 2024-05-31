@@ -31,7 +31,107 @@
 /******** Class method definitions ********/
 /******************************************/
 
-HttpServer::HttpServer(const std::string path_to_resources): path_to_resources(path_to_resources) 
+const std::map<const std::string, const std::string> extension_to_content_type =
+{
+    {"aac"      ,	"audio/aac"                                                                 },
+    {"abw"      ,	"application/x-abiword"                                                     },
+    {"apng"     ,   "image/apng"                                                                },
+    {"arc"      ,	"application/x-freearc"                                                     },
+    {"avif"     ,	"image/avif"                                                                },
+    {"avi"      ,	"video/x-msvideo"                                                           },
+    {"azw"      ,	"application/vnd.amazon.ebook"                                              },
+    {"bin"      ,	"application/octet-stream"                                                  },
+    {"bmp"      ,	"image/bmp"                                                                 },
+    {"bz"       ,	"application/x-bzip"                                                        },
+    {"bz2"      ,	"application/x-bzip2"                                                       },
+    {"cda"      ,	"application/x-cdf"                                                         },
+    {"csh"      ,	"application/x-csh"                                                         },
+    {"css"      ,	"text/css"                                                                  },
+    {"csv"      ,	"text/csv"                                                                  },
+    {"doc"      ,	"application/msword"                                                        },
+    {"docx"     ,	"application/vnd.openxmlformats-officedocument.wordprocessingml.document"   },
+    {"eot"      ,	"application/vnd.ms-fontobject"                                             },
+    {"epub"     ,	"application/epub+zip"                                                      },
+    {"gz"       ,	"application/gzip"                                                          },
+    {"gif"      ,	"image/gif"                                                                 },
+    {"htm"      ,	"text/html"                                                                 },
+    {"html"     ,	"text/html"                                                                 },
+    {"ico"      ,	"image/vnd.microsoft.icon"                                                  },
+    {"ics"      ,	"text/calendar"                                                             },
+    {"jar"      ,	"application/java-archive"                                                  },
+    {"jpg"      ,	"image/jpeg"                                                                },
+    {"jpeg"     ,	"image/jpeg"                                                                },
+    {"js"       ,	"javascript"                                                                },
+    {"json"     ,	"application/json"                                                          },
+    {"jsonld"   ,	"application/ld+json"                                                       },
+    {"mid"      ,	"audio/x-midi"                                                              },
+    {"midi"     ,	"audio/x-midi"                                                              },
+    {"mjs"      ,	"text/javascript"                                                           },
+    {"mp3"      ,	"audio/mpeg"                                                                },
+    {"mp4"      ,	"video/mp4"                                                                 },
+    {"mpeg"     ,	"video/mpeg"                                                                },
+    {"mpkg"     ,	"application/vnd.apple.installer+xml"                                       },
+    {"odp"      ,	"application/vnd.oasis.opendocument.presentation"                           },
+    {"ods"      ,	"application/vnd.oasis.opendocument.spreadsheet"                            },
+    {"odt"      ,	"application/vnd.oasis.opendocument.text"                                   },
+    {"oga"      ,	"audio/ogg"                                                                 },
+    {"ogv"      ,	"video/ogg"                                                                 },
+    {"ogx"      ,	"application/ogg"                                                           },
+    {"opus"     ,	"audio/opus"                                                                },
+    {"otf"      ,	"font/otf"                                                                  },
+    {"png"      ,	"image/png"                                                                 },
+    {"pdf"      ,	"application/pdf"                                                           },
+    {"php"      ,	"application/x-httpd-php"                                                   },
+    {"ppt"      ,	"application/vnd.ms-powerpoint"                                             },
+    {"pptx"     ,	"application/vnd.openxmlformats-officedocument.presentationml.presentation" },
+    {"rar"      ,	"application/vnd.rar"                                                       },
+    {"rtf"      ,	"application/rtf"                                                           },
+    {"sh"       ,	"application/x-sh"                                                          },
+    {"svg"      ,	"image/svg+xml"                                                             },
+    {"tar"      ,	"application/x-tar"                                                         },
+    {"tif"      ,	"image/tiff"                                                                },
+    {"tiff"     ,	"image/tiff"                                                                },
+    {"ts"       ,	"video/mp2t"                                                                },
+    {"ttf"      ,	"font/ttf"                                                                  },
+    {"txt"      ,	"text/plain"                                                                },
+    {"vsd"      ,	"application/vnd.visio"                                                     },
+    {"wav"      ,	"audio/wav"                                                                 },
+    {"weba"     ,	"audio/webm"                                                                },
+    {"webm"     ,	"video/webm"                                                                },
+    {"webp"     ,	"image/webp"                                                                },
+    {"woff"     ,	"font/woff"                                                                 },
+    {"woff2"    ,	"font/woff2"                                                                },
+    {"xhtml"    ,	"application/xhtml+xml"                                                     },
+    {"xls"      ,	"application/vnd.ms-excel"                                                  },
+    {"xlsx"     ,	"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"         },
+    {"xml"      ,	"application/xml"                                                           },
+    {"xul"      ,	"application/vnd.mozilla.xul+xml"                                           },
+    {"zip"      ,	"application/zip"                                                           },
+    {"3gp"      ,	"video/3gpp"                                                                },
+    {"3g2"      ,	"video/3gpp2"                                                               },
+    {"7z"       ,	"application/x-7z-compressed"                                               },
+};
+
+std::map<const std::string, std::string> request_fields =
+{
+    {"Method"                       , ""},
+    {"Requested resource"           , ""},
+    {"Protocol"                     , ""},
+    {"Host"                         , ""},
+    {"Connection"                   , ""},
+    {"Cache-Control"                , ""},
+    {"Upgrade-Insecure-Requests"    , ""},
+    {"User-Agent"                   , ""},
+    {"Accept"                       , ""},
+    {"Referer"                      , ""},
+    {"Accept-Encoding"              , ""},
+    {"Accept-Language"              , ""},
+};
+
+HttpServer::HttpServer(const std::string path_to_resources):
+    path_to_resources(path_to_resources),
+    ptr_extension_to_content(std::make_shared<ext_to_type_table>(extension_to_content_type)),
+    ptr_request_fields(std::make_shared<request_fields_table>(request_fields)) 
 {
     LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
 }
@@ -44,7 +144,7 @@ HttpServer::~HttpServer()
 /////////////////////////////////////////////////////////////////////////////////////////
 // Read data from client
 
-int HttpServer::ReadFromClient(int& client_socket, std::string& read_from_client)
+int HttpServer::ReadFromClient(int& client_socket)
 {
     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
     HTTP_READ_FSM http_read_fsm = HTTP_READ_FSM_READ_TRY;
@@ -54,7 +154,7 @@ int HttpServer::ReadFromClient(int& client_socket, std::string& read_from_client
     char client_IP_addr[INET_ADDRSTRLEN] = {};
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
-    read_from_client.clear();
+    this->read_from_client.clear();
     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
 
     while(keep_trying)
@@ -112,12 +212,12 @@ int HttpServer::ReadFromClient(int& client_socket, std::string& read_from_client
 
             case HTTP_READ_FSM_ADD_TO_READ_DATA:
             {
-                read_from_client += rx_buffer;
+                this->read_from_client += rx_buffer;
                 memset(rx_buffer, 0, read_from_socket);
 
-                if(this->CheckRequestEnd(read_from_client))
+                if(this->CheckRequestEnd())
                 {
-                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else
@@ -139,13 +239,13 @@ int HttpServer::ReadFromClient(int& client_socket, std::string& read_from_client
     return keep_connected;
 }
 
-bool HttpServer::CheckRequestEnd(std::string& request)
+bool HttpServer::CheckRequestEnd(void)
 {
     // Check first whether or not is the request message long enough.
-    if (request.length() < 4)
+    if (this->read_from_client.length() < 4)
         return false;
     
-    std::string end = request.substr(request.length() - 4); // Extract last 4 characters
+    std::string end = this->read_from_client.substr(this->read_from_client.length() - 4); // Extract last 4 characters
     
     return (end == HTTP_SERVER_HTTP_MSG_END);
 }
@@ -155,11 +255,11 @@ bool HttpServer::CheckRequestEnd(std::string& request)
 /////////////////////////////////////////////////////////////////////////////////////////
 // Process request
 
-int HttpServer::ProcessRequest(const std::string&read_from_client, std::map<const std::string, std::string>& request_fields)
+int HttpServer::ProcessRequest(void)
 {
     // Process every line within the request except for the first one (it has already been analysed).
     std::string line;
-    std::istringstream iss(read_from_client);
+    std::istringstream iss(this->read_from_client);
     
     std::getline(iss, line);
     if(!line.empty() && line[line.size() - 1] == '\n')
@@ -173,11 +273,11 @@ int HttpServer::ProcessRequest(const std::string&read_from_client, std::map<cons
     LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
     LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
 
-    request_fields.at("Method")             = words_from_req_line[0];
-    request_fields.at("Requested resource") = words_from_req_line[1];
-    request_fields.at("Protocol")           = words_from_req_line[2];
+    (*(this->ptr_request_fields)).at("Method")             = words_from_req_line[0];
+    (*(this->ptr_request_fields)).at("Requested resource") = words_from_req_line[1];
+    (*(this->ptr_request_fields)).at("Protocol")           = words_from_req_line[2];
 
-    if(request_fields.at("Method").empty() || request_fields.at("Requested resource").empty() || request_fields.at("Protocol").empty())
+    if((*(this->ptr_request_fields)).at("Method").empty() || (*(this->ptr_request_fields)).at("Requested resource").empty() || (*(this->ptr_request_fields)).at("Protocol").empty())
     {
         LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
         return HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED;
@@ -204,8 +304,8 @@ int HttpServer::ProcessRequest(const std::string&read_from_client, std::map<cons
             value   = line.substr(pos + 2); // After ": "
         }
 
-        if(request_fields.count(key) != 0)
-            request_fields.at(key) = value;
+        if((*(this->ptr_request_fields)).count(key) != 0)
+            (*(this->ptr_request_fields)).at(key) = value;
         else
             LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, value.c_str());
     }
@@ -228,12 +328,12 @@ std::vector<std::string> HttpServer::ExtractWordsFromReqLine(const std::string& 
 /////////////////////////////////////////////////////////////////////////////////////////
 // Generate response for client
 
-unsigned long int HttpServer::GenerateResponse(const std::string& requested_resource, std::string& httpResponse)
+unsigned long int HttpServer::GenerateResponse(void)
 {
     std::string resource_file;
     std::string content_type ;
 
-    const std::string resource_to_send = this->CheckResourceToSend(requested_resource);
+    const std::string resource_to_send = this->CheckResourceToSend();
 
     try
     {
@@ -249,22 +349,22 @@ unsigned long int HttpServer::GenerateResponse(const std::string& requested_reso
     if(get_html < 0)
         return get_html;
 
-    httpResponse =  "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: "        +  content_type                         + "\r\n"
-                    "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
-                    "Connection: keep-alive\r\n"
-                    "\r\n" +
-                    resource_file;
+    this->httpResponse =    "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: "        +  content_type                         + "\r\n"
+                            "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
+                            "Connection: keep-alive\r\n"
+                            "\r\n" +
+                            resource_file;
 
-    return httpResponse.size();
+    return this->httpResponse.size();
 }
 
-const std::string HttpServer::CheckResourceToSend(const std::string& requested_resource)
+const std::string HttpServer::CheckResourceToSend(void)
 {
-    std::string requested_resource_aux = std::string(requested_resource);
+    std::string requested_resource_aux = std::string((*(this->ptr_request_fields)).at("Requested resource"));
 
     // If no resource has been specified, then return the index page by default.
-    if(requested_resource == "" || requested_resource == "/")
+    if((*(this->ptr_request_fields)).at("Requested resource") == "" || (*(this->ptr_request_fields)).at("Requested resource") == "/")
         requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
     
     if(this->FileExists(this->GetPathToResources() + requested_resource_aux))
@@ -345,9 +445,9 @@ const std::string HttpServer::GetMIMEDataType(const std::string& content_type)
 /////////////////////////////////////////////////////////////////////////////////////////
 // Write to client
 
-int HttpServer::WriteToClient(int& client_socket, const std::string& httpResponse)
+int HttpServer::WriteToClient(int& client_socket)
 {
-    unsigned long remaining_data_len    = httpResponse.size();
+    unsigned long remaining_data_len    = this->httpResponse.size();
     unsigned long bytes_already_written = 0;
     
     HTTP_WRITE_FSM http_write_fsm = HTTP_WRITE_FSM_WRITE_TRY;
@@ -360,7 +460,7 @@ int HttpServer::WriteToClient(int& client_socket, const std::string& httpRespons
         {
             case HTTP_WRITE_FSM_WRITE_TRY:
             {
-                long int socket_write = ServerSocketWrite(client_socket, httpResponse.data() + bytes_already_written, remaining_data_len);
+                long int socket_write = ServerSocketWrite(client_socket, this->httpResponse.data() + bytes_already_written, remaining_data_len);
 
                 if((socket_write < 0))
                 {
@@ -388,7 +488,7 @@ int HttpServer::WriteToClient(int& client_socket, const std::string& httpRespons
                     // Otherwise, keep writing.
                     if(remaining_data_len == 0)
                     {
-                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
+                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->httpResponse.data());
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                         end_connection = 0;
                     }
