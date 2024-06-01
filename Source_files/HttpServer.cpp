@@ -112,26 +112,22 @@ const std::map<const std::string, const std::string> extension_to_content_type =
     {"7z"       ,	"application/x-7z-compressed"                                               },
 };
 
-std::map<const std::string, std::string> request_fields =
+const std::map<const std::string, const unsigned int> method_to_uint =
 {
-    {"Method"                       , ""},
-    {"Requested resource"           , ""},
-    {"Protocol"                     , ""},
-    {"Host"                         , ""},
-    {"Connection"                   , ""},
-    {"Cache-Control"                , ""},
-    {"Upgrade-Insecure-Requests"    , ""},
-    {"User-Agent"                   , ""},
-    {"Accept"                       , ""},
-    {"Referer"                      , ""},
-    {"Accept-Encoding"              , ""},
-    {"Accept-Language"              , ""},
+    {"GET"      , HTTP_SERVER_METHOD_CODE_GET    },
+    {"HEAD"     , HTTP_SERVER_METHOD_CODE_HEAD   },
+    {"POST"     , HTTP_SERVER_METHOD_CODE_POST   },
+    {"PUT"      , HTTP_SERVER_METHOD_CODE_PUT    },
+    {"DELETE"   , HTTP_SERVER_METHOD_CODE_DELETE },
+    {"CONNECT"  , HTTP_SERVER_METHOD_CODE_CONNECT},
+    {"OPTIONS"  , HTTP_SERVER_METHOD_CODE_OPTIONS},
+    {"TRACE"    , HTTP_SERVER_METHOD_CODE_TRACE  },
 };
 
 HttpServer::HttpServer(const std::string path_to_resources):
-    path_to_resources(path_to_resources),
+    path_to_resources(path_to_resources)                                                    ,
     ptr_extension_to_content(std::make_shared<ext_to_type_table>(extension_to_content_type)),
-    ptr_request_fields(std::make_shared<request_fields_table>(request_fields)) 
+    ptr_method_to_uint(std::make_shared<method_to_uint_table>(method_to_uint))              
 {
     LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
 }
@@ -273,11 +269,11 @@ int HttpServer::ProcessRequest(void)
     LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
     LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
 
-    (*(this->ptr_request_fields)).at("Method")             = words_from_req_line[0];
-    (*(this->ptr_request_fields)).at("Requested resource") = words_from_req_line[1];
-    (*(this->ptr_request_fields)).at("Protocol")           = words_from_req_line[2];
+    this->request_fields.at("Method")             = words_from_req_line[0];
+    this->request_fields.at("Requested resource") = words_from_req_line[1];
+    this->request_fields.at("Protocol")           = words_from_req_line[2];
 
-    if((*(this->ptr_request_fields)).at("Method").empty() || (*(this->ptr_request_fields)).at("Requested resource").empty() || (*(this->ptr_request_fields)).at("Protocol").empty())
+    if(this->request_fields.at("Method").empty() || this->request_fields.at("Requested resource").empty() || this->request_fields.at("Protocol").empty())
     {
         LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
         return HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED;
@@ -304,10 +300,10 @@ int HttpServer::ProcessRequest(void)
             value   = line.substr(pos + 2); // After ": "
         }
 
-        if((*(this->ptr_request_fields)).count(key) != 0)
-            (*(this->ptr_request_fields)).at(key) = value;
+        if(this->request_fields.count(key) != 0)
+            this->request_fields.at(key) = value;
         else
-            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, value.c_str());
+            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, key.c_str());
     }
 
     return 0;
@@ -337,7 +333,8 @@ unsigned long int HttpServer::GenerateResponse(void)
 
     try
     {
-        content_type = std::string((*(this->ptr_extension_to_content)).at(this->GetFileExtension(resource_to_send)));
+        // Get file extension of the resource to be sent, then get its proper content type.
+        content_type = std::string( this->ptr_extension_to_content->at( this->GetFileExtension(resource_to_send) ) );
     }
     catch(const std::out_of_range& e)
     {
@@ -349,22 +346,26 @@ unsigned long int HttpServer::GenerateResponse(void)
     if(get_html < 0)
         return get_html;
 
-    this->httpResponse =    "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: "        +  content_type                         + "\r\n"
-                            "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
-                            "Connection: keep-alive\r\n"
-                            "\r\n" +
-                            resource_file;
+    this->http_response.clear();
 
-    return this->httpResponse.size();
+    this->http_response =   "HTTP/1.1 200 OK\r\n"
+                            "Content-Type: "        +   content_type                                    + "\r\n" +
+                            "Content-Length: "      +   std::to_string(resource_file.size())            + "\r\n" +
+                            "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
+                            "\r\n";
+    
+    if(this->request_fields.at("Method") == "GET")
+        this->http_response += resource_file;
+
+    return this->http_response.size();
 }
 
 const std::string HttpServer::CheckResourceToSend(void)
 {
-    std::string requested_resource_aux = std::string((*(this->ptr_request_fields)).at("Requested resource"));
+    std::string requested_resource_aux = std::string(this->request_fields.at("Requested resource"));
 
     // If no resource has been specified, then return the index page by default.
-    if((*(this->ptr_request_fields)).at("Requested resource") == "" || (*(this->ptr_request_fields)).at("Requested resource") == "/")
+    if(this->request_fields.at("Requested resource") == "" || this->request_fields.at("Requested resource") == "/")
         requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
     
     if(this->FileExists(this->GetPathToResources() + requested_resource_aux))
@@ -409,7 +410,7 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    const std::string mime_data_type = this->GetMIMEDataType((*(this->ptr_extension_to_content)).at(this->GetFileExtension(path_to_requested_resource)));
+    const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->GetFileExtension(path_to_requested_resource)));
 
     if(mime_data_type == "text")
     {
@@ -447,7 +448,7 @@ const std::string HttpServer::GetMIMEDataType(const std::string& content_type)
 
 int HttpServer::WriteToClient(int& client_socket)
 {
-    unsigned long remaining_data_len    = this->httpResponse.size();
+    unsigned long remaining_data_len    = this->http_response.size();
     unsigned long bytes_already_written = 0;
     
     HTTP_WRITE_FSM http_write_fsm = HTTP_WRITE_FSM_WRITE_TRY;
@@ -460,7 +461,7 @@ int HttpServer::WriteToClient(int& client_socket)
         {
             case HTTP_WRITE_FSM_WRITE_TRY:
             {
-                long int socket_write = ServerSocketWrite(client_socket, this->httpResponse.data() + bytes_already_written, remaining_data_len);
+                long int socket_write = ServerSocketWrite(client_socket, this->http_response.data() + bytes_already_written, remaining_data_len);
 
                 if((socket_write < 0))
                 {
@@ -488,7 +489,7 @@ int HttpServer::WriteToClient(int& client_socket)
                     // Otherwise, keep writing.
                     if(remaining_data_len == 0)
                     {
-                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->httpResponse.data());
+                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->http_response.data());
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                         end_connection = 0;
                     }
@@ -510,6 +511,126 @@ int HttpServer::WriteToClient(int& client_socket)
     }
 
     return end_connection;
+}
+
+int HttpServer::Run(int& client_socket)
+{
+    bool keep_interacting       = true              ;
+    HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
+
+    while(keep_interacting)
+    {
+        switch(http_run_fsm)
+        {
+            // First, try to read something from client.
+            // If client got disconnected while trying to read or any error happened, end_connection > 0.
+            // In that case, exit and wait for an incoming connection to happen again.
+            case HTTP_RUN_FSM_READ:
+            {
+                int end_connection = this->ReadFromClient(client_socket);
+                
+                if(end_connection < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_PROCESS_REQUEST;
+            }
+            break;
+
+            // Once something has been read, process the request. Erase the current request string afterwards,
+            // leaving enough space for potential incoming requests.
+            case HTTP_RUN_FSM_PROCESS_REQUEST:
+            {
+                int process_request = this->ProcessRequest();
+                
+                // If request could not be processed properly, then stop interacting with the client.
+                if(process_request < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                {
+                    // Get method code from method string, after having got the method string from the request fields.
+                    switch( this->ptr_method_to_uint->at( this->request_fields.at("Method") ))
+                    {
+                        // NOTE: according to RFC 9110 (HTTP semantics), 
+                        // "All general-purpose servers MUST support the methods GET and HEAD. All other methods are OPTIONAL."
+                        
+                        case HTTP_SERVER_METHOD_CODE_GET    :
+                        case HTTP_SERVER_METHOD_CODE_HEAD   :
+                            http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
+                        break;
+
+                        // case HTTP_SERVER_METHOD_CODE_POST   :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_PUT    :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_DELETE :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_CONNECT:
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_OPTIONS:
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_TRACE  :
+                        //     http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
+                        // break;
+
+                        default:
+                        {
+                            LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
+                            http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                        }
+                        break;
+                    }
+                }
+            }
+            break;
+
+            // After processing the request, generate a proper response.
+            case HTTP_RUN_FSM_GENERATE_RESPONSE:
+            {
+                unsigned long int response_size = this->GenerateResponse();
+
+                // If response could not be generated, exit and wait for an incoming connection to happen again.
+                if(response_size < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_WRITE;
+            }
+            break;
+
+            // Finally, send the generated response back to the client.
+            // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
+            case HTTP_RUN_FSM_WRITE:
+            {
+                int write_to_client = this->WriteToClient(client_socket);
+
+                if(write_to_client < 0)
+                    http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                else
+                    http_run_fsm = HTTP_RUN_FSM_READ;
+            }
+            break;
+
+            case HTTP_RUN_FSM_END_CONNECTION:
+            {
+                keep_interacting = false;
+            }
+            break;
+
+            default:
+            break;
+        }
+    }
+
+    return 0;
 }
 
 /******************************************/
