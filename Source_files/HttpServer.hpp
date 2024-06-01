@@ -30,18 +30,28 @@
 #define HTTP_SERVER_MSG_ECONNREFUSED                "Connection refused by peer, errno: %d"
 #define HTTP_SERVER_MSG_ERROR_WHILE_READING         "ERROR WHILE READING, errno: %d"
 #define HTTP_SERVER_MSG_READ_TMT_EXPIRED            "READ TIMEOUT EXPIRED!"
-#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD          "Unknown field: "
+#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD          "Unknown field: %s"
 #define HTTP_SERVER_MSG_OPENING_FILE                "Error opening file \"%s\"."
 #define HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE        "UNKNOWN CONTENT TYPE (File extension: %s)"
 #define HTTP_SERVER_MSG_RQST_METHOD                 "METHOD:    %s"
 #define HTTP_SERVER_MSG_RQST_RESOURCE               "RESOURCE:  %s"
 #define HTTP_SERVER_MSG_RQST_PROTOCOL               "PROTOCOL:  %s"
 #define HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING    "One of the basic request fields (either method, requested resource or protocol) is missing."
-#define HTTP_SERVER_MSG_PARTIAL_WRITE               "Partial write detected. Already written: %d. Remaining bytes amount: %d"
+#define HTTP_SERVER_MSG_PARTIAL_WRITE               "Partial write detected. Already written: %d. Remaining bytes amount: %d."
+#define HTTP_SERVER_MSG_UNSUPPORTED_METHOD          "Unsupported method received: %s. Closing connection."
 
 #define HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED    -1
 #define HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND    -2
 #define HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE       -3
+
+#define HTTP_SERVER_METHOD_CODE_GET     0
+#define HTTP_SERVER_METHOD_CODE_HEAD    1
+#define HTTP_SERVER_METHOD_CODE_POST    2
+#define HTTP_SERVER_METHOD_CODE_PUT     3
+#define HTTP_SERVER_METHOD_CODE_DELETE  4
+#define HTTP_SERVER_METHOD_CODE_CONNECT 5
+#define HTTP_SERVER_METHOD_CODE_OPTIONS 6
+#define HTTP_SERVER_METHOD_CODE_TRACE   7
 
 /************************************/
 
@@ -83,20 +93,46 @@ class HttpServer
 private:
     const std::string path_to_resources;
 
-    using ext_to_type_table = const std::map<const std::string, const std::string>;
-    const std::shared_ptr<ext_to_type_table> ptr_extension_to_content;
+    using ext_to_type_table     = const std::map<const std::string, const std::string>  ;
+    using method_to_uint_table  = const std::map<const std::string, const unsigned int> ;
 
-    using request_fields_table = std::map<const std::string, std::string>;
-    const std::shared_ptr<request_fields_table> ptr_request_fields;
+    const std::shared_ptr<ext_to_type_table> ptr_extension_to_content   ;
+    const std::shared_ptr<method_to_uint_table> ptr_method_to_uint      ;
+
+    std::map<const std::string, std::string> request_fields =
+    {
+        {"Method"                       , ""},
+        {"Requested resource"           , ""},
+        {"Protocol"                     , ""},
+        {"Host"                         , ""},
+        {"Connection"                   , ""},
+        {"Cache-Control"                , ""},
+        {"Upgrade-Insecure-Requests"    , ""},
+        {"User-Agent"                   , ""},
+        {"Accept"                       , ""},
+        {"Content-Length"               , ""},
+        {"Referer"                      , ""},
+        {"Accept-Encoding"              , ""},
+        {"Accept-Language"              , ""},
+    };
 
     std::string read_from_client;
-    std::string httpResponse    ;
+    std::string http_response   ;
+
+    // Read data from client
+    int ReadFromClient(int& client_socket);
 
     // Used by ReadFromClient
     bool CheckRequestEnd(void);
     
+    // Process request
+    int ProcessRequest(void);
+
     // Used by ProcessRequest
     std::vector<std::string> ExtractWordsFromReqLine(const std::string& input);
+
+    // Generate response for client
+    unsigned long int GenerateResponse();
 
     // Used by GenerateResponse
     const std::string   CheckResourceToSend(void)                          ;
@@ -106,25 +142,19 @@ private:
     int                 CopyFileToString(const std::string& path_to_requested_resource, std::string& dest)  ;
     const std::string   GetMIMEDataType(const std::string& content_type)                                    ;
 
+    // Write to client
+    int WriteToClient(int& client_socket);
+
 public:
     HttpServer(const std::string path_to_resources);
-    virtual ~HttpServer();
+    virtual ~HttpServer(void);
 
     // Copy constructor will not be allowed as undefined/repeated parameters can lead to potential
     // conflicts during runtime.
     HttpServer(const HttpServer& obj) = delete;
 
-    // Read data from client
-    int ReadFromClient(int& client_socket);
-
-    // Process request
-    int ProcessRequest(void);
-
-    // Generate response for client
-    unsigned long int GenerateResponse();
-
-    // Write to client
-    int WriteToClient(int& client_socket);
+    // Run Http Server FSM
+    int Run(int& client_socket);
 };
 
 /************************************/
