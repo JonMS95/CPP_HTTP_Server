@@ -344,10 +344,8 @@ unsigned long int HttpServer::GenerateResponse(void)
         return HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
     }
 
-    // If the resource type is well known by the server, then copy its content to a string. Abort if file could not be opened.
-    int get_html = this->CopyFileToString(resource_to_send, resource_file);
-    if(get_html < 0)
-        return get_html;
+    // If the resource type is well known by the server, then retrieve its size. Abort if file could not be opened.
+    long int requested_resource_size = this->GetRequestedResourceSize(resource_to_send);
 
     // Clear the response string.
     this->http_response.clear();
@@ -355,13 +353,19 @@ unsigned long int HttpServer::GenerateResponse(void)
     // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
     this->http_response =   "HTTP/1.1 200 OK\r\n"
                             "Content-Type: "        +   content_type                                    + "\r\n" +
-                            "Content-Length: "      +   std::to_string(resource_file.size())            + "\r\n" +
+                            "Content-Length: "      +   std::to_string(requested_resource_size)         + "\r\n" +
                             "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
                             "\r\n";
     
     // If request method is GET, then add the resource file as string as well.
     if(this->request_fields.at("Method") == "GET")
+    {
+        int get_html = this->CopyFileToString(resource_to_send, resource_file);
+        if(get_html < 0)
+            return get_html;
+        
         this->http_response += resource_file;
+    }
 
     // Return response size.
     return this->http_response.size();
@@ -403,6 +407,21 @@ std::string HttpServer::ParseFileExtension(const std::string& text)
     return "";
 }
 
+long int HttpServer::GetRequestedResourceSize(const std::string& resource_to_send)
+{
+    std::ifstream file(resource_to_send, std::ios::binary | std::ios::ate); // Open file in binary mode and move the file pointer to the end
+    
+    if (!file.is_open())
+    {
+        LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, resource_to_send.c_str());
+        return HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND;
+    }
+    
+    std::streampos fileSize = file.tellg(); // Get the position of the file pointer, which is at the end
+    file.close();
+    return fileSize;
+}
+
 int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, std::string& dest)
 {
     std::ifstream file(path_to_requested_resource); // Open the file
@@ -419,18 +438,18 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
 
     const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
 
-    if(mime_data_type == "text")
-    {
-        // Replace '\n' with "\r\n"
-        size_t pos = 0;
-        while ((pos = dest.find('\n', pos)) != std::string::npos)
-        {
-            dest.replace(pos, 1, "\r\n");
+    // if(mime_data_type == "text")
+    // {
+    //     // Replace '\n' with "\r\n"
+    //     size_t pos = 0;
+    //     while ((pos = dest.find('\n', pos)) != std::string::npos)
+    //     {
+    //         dest.replace(pos, 1, "\r\n");
 
-            // Move past the inserted "\r\n"
-            pos += 2;
-        }
-    }
+    //         // Move past the inserted "\r\n"
+    //         pos += 2;
+    //     }
+    // }
 
     // Close the file
     file.close();
