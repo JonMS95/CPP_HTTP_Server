@@ -29,7 +29,6 @@
 class HttpInteractHandler
 {
 private:
-    static int HttpServerFSM(HttpServer& http_server, int client_socket);
     static std::string path_to_resources;
 
 public:
