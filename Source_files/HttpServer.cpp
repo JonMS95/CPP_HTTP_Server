@@ -329,38 +329,45 @@ unsigned long int HttpServer::GenerateResponse(void)
     std::string resource_file;
     std::string content_type ;
 
-    const std::string resource_to_send = this->CheckResourceToSend();
+    // First, get the path to the requested resource.
+    const std::string resource_to_send = this->GetPathToRequestedResource();
 
+    // Then, check whether or not does the requested resource matches a supported type.
     try
     {
         // Get file extension of the resource to be sent, then get its proper content type.
-        content_type = std::string( this->ptr_extension_to_content->at( this->GetFileExtension(resource_to_send) ) );
+        content_type = std::string( this->ptr_extension_to_content->at( this->ParseFileExtension(resource_to_send) ) );
     }
     catch(const std::out_of_range& e)
     {
-        LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->GetFileExtension(resource_to_send).c_str());
+        LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
         return HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
     }
 
+    // If the resource type is well known by the server, then copy its content to a string. Abort if file could not be opened.
     int get_html = this->CopyFileToString(resource_to_send, resource_file);
     if(get_html < 0)
         return get_html;
 
+    // Clear the response string.
     this->http_response.clear();
 
+    // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
     this->http_response =   "HTTP/1.1 200 OK\r\n"
                             "Content-Type: "        +   content_type                                    + "\r\n" +
                             "Content-Length: "      +   std::to_string(resource_file.size())            + "\r\n" +
                             "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
                             "\r\n";
     
+    // If request method is GET, then add the resource file as string as well.
     if(this->request_fields.at("Method") == "GET")
         this->http_response += resource_file;
 
+    // Return response size.
     return this->http_response.size();
 }
 
-const std::string HttpServer::CheckResourceToSend(void)
+const std::string HttpServer::GetPathToRequestedResource(void)
 {
     std::string requested_resource_aux = std::string(this->request_fields.at("Requested resource"));
 
@@ -386,7 +393,7 @@ bool HttpServer::FileExists(const std::string& filePath)
     return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
 }
 
-std::string HttpServer::GetFileExtension(const std::string& text)
+std::string HttpServer::ParseFileExtension(const std::string& text)
 {
     size_t dotPosition = text.find_last_of('.');
     if (dotPosition != std::string::npos && dotPosition < text.length() - 1)
@@ -410,7 +417,7 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->GetFileExtension(path_to_requested_resource)));
+    const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
 
     if(mime_data_type == "text")
     {
