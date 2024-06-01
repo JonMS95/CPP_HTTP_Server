@@ -138,7 +138,8 @@ private:
     const std::string   GetPathToRequestedResource(void)                                                    ;
     const std::string   GetPathToResources(void)                                                            ;
     bool                FileExists(const std::string& filePath)                                             ;
-    std::string         ParseFileExtension(const std::string& text)                                           ;
+    std::string         ParseFileExtension(const std::string& text)                                         ;
+    long int            GetRequestedResourceSize(const std::string& resource_to_send)                       ;
     int                 CopyFileToString(const std::string& path_to_requested_resource, std::string& dest)  ;
     const std::string   GetMIMEDataType(const std::string& content_type)                                    ;
 
