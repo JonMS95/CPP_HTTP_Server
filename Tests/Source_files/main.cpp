@@ -5,7 +5,7 @@
 #include "ServerSocket_api.h"
 #include "GetOptions_api.h"
 #include "SeverityLog_api.h"
-#include "test_api.hpp"
+#include "HttpServer_api.hpp"
 #include <cstdlib>
 
 /************************************/
@@ -29,8 +29,8 @@
 #define CLIENTS_OPT_LONG                    "Clients"
 #define CLIENTS_OPT_DETAIL                  "Maximum number of clients."
 #define CLIENTS_MIN_VALUE                   1
-#define CLIENTS_MAX_VALUE                   3
-#define CLIENTS_DEFAULT_VALUE               1
+#define CLIENTS_MAX_VALUE                   100
+#define CLIENTS_DEFAULT_VALUE               3
 
 /********* Enable concurrency *********/
 
@@ -39,32 +39,21 @@
 #define SIMULTANEOUS_CONNS_DETAIL           "Enable concurrency."
 #define SIMULTANEOUS_CONNS_DEFAULT_VALUE    false
 
-/********* Non-blocking socket ********/
+/********** Receive timeout (s) ******/
+#define RX_TIMEOUT_SECS_CHAR                't'
+#define RX_TIMEOUT_SECS_OPT_LONG            "RXTimeoutSecs"
+#define RX_TIMEOUT_SECS_OPT_DETAIL          "Receive Timeout in seconds."
+#define RX_TIMEOUT_SECS_MIN_VALUE           0
+#define RX_TIMEOUT_SECS_MAX_VALUE           3600    // 1 hour
+#define RX_TIMEOUT_SECS_DEFAULT_VALUE       600     // 10 minutes
 
-#define NON_BLOCKING_CHAR                   'n'
-#define NON_BLOCKING_LONG                   "NonBlocking"
-#define NON_BLOCKING_DETAIL                 "Non blocking socket."
-#define NON_BLOCKING_DEFAULT_VALUE          false
-
-/*********** Reuse address ***********/
-#define REUSE_ADDRESS_CHAR                  'a'
-#define REUSE_ADDRESS_LONG                  "ReuseAddress"
-#define REUSE_ADDRESS_DETAIL                "Reuse address."
-#define REUSE_ADDRESS_DEFAULT_VALUE         false
-
-/************ Reuse port *************/
-#define REUSE_PORT_CHAR                     'b'
-#define REUSE_PORT_LONG                     "ReusePort"
-#define REUSE_PORT_DETAIL                   "Reuse port."
-#define REUSE_PORT_DEFAULT_VALUE            false
-
-/********** Receive timeout **********/
-#define RX_TIMEOUT_CHAR                     't'
-#define RX_TIMEOUT_OPT_LONG                 "RXTimeout"
-#define RX_TIMEOUT_OPT_DETAIL               "Receive Timeout. Useless if non-blocking."
-#define RX_TIMEOUT_MIN_VALUE                0
-#define RX_TIMEOUT_MAX_VALUE                5000000             // 5 seconds
-#define RX_TIMEOUT_DEFAULT_VALUE            1000000
+/********** Receive timeout (us) *****/
+#define RX_TIMEOUT_USECS_CHAR               'u'
+#define RX_TIMEOUT_USECS_OPT_LONG           "RXTimeoutUsecs"
+#define RX_TIMEOUT_USECS_OPT_DETAIL         "Receive Timeout in microseconds."
+#define RX_TIMEOUT_USECS_MIN_VALUE          0
+#define RX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
+#define RX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
 
 /********* Secure connection *********/
 
@@ -96,8 +85,7 @@
 #define RESOURCES_OPT_CHAR                  'e'
 #define RESOURCES_OPT_LONG                  "Resources"
 #define RESOURCES_OPT_DETAIL                "Path to web resources"
-// #define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Sample_webpage"
-#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/HTML/HTML_tutorial"
+#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Sample_webpage"
 
 /***************************************/
 
@@ -112,14 +100,12 @@ int main(int argc, char** argv)
     int server_port         ;
     int max_clients_num     ;
     bool concurrency_enabled;
-    bool non_blocking       ;
-    bool reuse_address      ;
-    bool reuse_port         ;
-    unsigned long rx_timeout;
+    int rx_timeout_s        ;
+    int rx_timeout_us       ;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
-    char* path_resources = (char*)calloc(1024, 1);
+    char* path_to_resources = (char*)calloc(1024, 1);
 
     SetOptionDefinitionInt(     PORT_OPT_CHAR                   ,
                                 PORT_OPT_LONG                   ,
@@ -143,31 +129,21 @@ int main(int argc, char** argv)
                                 SIMULTANEOUS_CONNS_DEFAULT_VALUE,
                                 &concurrency_enabled            );
 
-    SetOptionDefinitionBool(    NON_BLOCKING_CHAR               ,
-                                NON_BLOCKING_LONG               ,
-                                NON_BLOCKING_DETAIL             ,
-                                NON_BLOCKING_DEFAULT_VALUE      ,
-                                &non_blocking                   );
+    SetOptionDefinitionInt(     RX_TIMEOUT_SECS_CHAR            ,
+                                RX_TIMEOUT_SECS_OPT_LONG        ,
+                                RX_TIMEOUT_SECS_OPT_DETAIL      ,
+                                RX_TIMEOUT_SECS_MIN_VALUE       ,
+                                RX_TIMEOUT_SECS_MAX_VALUE       ,
+                                RX_TIMEOUT_SECS_DEFAULT_VALUE   ,
+                                &rx_timeout_s                   );
 
-    SetOptionDefinitionBool(    REUSE_ADDRESS_CHAR              ,
-                                REUSE_ADDRESS_LONG              ,
-                                REUSE_ADDRESS_DETAIL            ,
-                                REUSE_ADDRESS_DEFAULT_VALUE     ,
-                                &reuse_address                  );
-
-    SetOptionDefinitionBool(    REUSE_PORT_CHAR                 ,
-                                REUSE_PORT_LONG                 ,
-                                REUSE_PORT_DETAIL               ,
-                                REUSE_PORT_DEFAULT_VALUE        ,
-                                &reuse_port                     );
-
-    SetOptionDefinitionInt(     RX_TIMEOUT_CHAR                 ,
-                                RX_TIMEOUT_OPT_LONG             ,
-                                RX_TIMEOUT_OPT_DETAIL           ,
-                                RX_TIMEOUT_MIN_VALUE            ,
-                                RX_TIMEOUT_MAX_VALUE            ,
-                                RX_TIMEOUT_DEFAULT_VALUE        ,
-                                &rx_timeout                     );
+    SetOptionDefinitionInt(     RX_TIMEOUT_USECS_CHAR           ,
+                                RX_TIMEOUT_USECS_OPT_LONG       ,
+                                RX_TIMEOUT_USECS_OPT_DETAIL     ,
+                                RX_TIMEOUT_USECS_MIN_VALUE      ,
+                                RX_TIMEOUT_USECS_MAX_VALUE      ,
+                                RX_TIMEOUT_USECS_DEFAULT_VALUE  ,
+                                &rx_timeout_us                  );
 
     SetOptionDefinitionBool(    SECURE_CONN_CHAR                ,
                                 SECURE_CONN_LONG                ,
@@ -191,7 +167,7 @@ int main(int argc, char** argv)
                                 RESOURCES_OPT_LONG              ,
                                 RESOURCES_OPT_DETAIL            ,
                                 RESOURCES_DEFAULT_VALUE         ,
-                                path_resources                  );
+                                path_to_resources               );
 
     int parse_arguments = ParseOptions(argc, argv);
     if(parse_arguments < 0)
@@ -202,19 +178,20 @@ int main(int argc, char** argv)
 
     LOG_INF("Arguments successfully parsed!");
 
-    HttpSetPathToResources(path_resources);
+    HttpInteract::SetPathToResources(path_to_resources);
 
-    ServerSocketRun(server_port         ,
-                    max_clients_num     ,
-                    concurrency_enabled ,
-                    non_blocking        ,
-                    reuse_address       ,
-                    reuse_port          ,
-                    rx_timeout          ,
-                    secure_connection   ,
-                    path_cert           ,
-                    path_pkey           ,
-                    HttpServerInteractFn);
+    ServerSocketRun(server_port             ,
+                    max_clients_num         ,
+                    concurrency_enabled     ,
+                    false                   ,
+                    true                    ,
+                    true                    ,
+                    rx_timeout_s            ,
+                    rx_timeout_us           ,
+                    secure_connection       ,
+                    path_cert               ,
+                    path_pkey               ,
+                    HttpInteract::InteractFn);
 
     return 0;
 }

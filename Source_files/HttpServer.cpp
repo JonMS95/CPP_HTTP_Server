@@ -1,6 +1,3 @@
-#include "test_api.hpp"
-
-
 /************************************/
 /******** Include statements ********/
 /************************************/
@@ -8,6 +5,7 @@
 #include <netinet/in.h>     // INET_ADDRSTRLEN.
 #include <arpa/inet.h>      // sockaddr_in, inet_addr
 #include <unistd.h>
+#include "HttpServer.hpp"
 #include "SeverityLog_api.h"
 #include "ServerSocket_api.h"
 
@@ -24,33 +22,14 @@
 /********* Define statements ********/
 /************************************/
 
-#define HTTP_SERVER_LEN_RX_BUFFER                   8192        // RX buffer size.
-#define HTTP_SERVER_LEN_TX_BUFFER                   8192        // TX buffer size.
-#define HTTP_SERVER_HTTP_MSG_END                    "\r\n\r\n"
-#define HTTP_SERVER_DEFAULT_PAGE                    "/index.html"
-#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE          "/page_not_found.html"
+#define HTTP_SERVER_MSG_INTANCE_CREATED     "Created HttpServer object instance. Path to HTTP(S) server resources: %s."
+#define HTTP_SERVER_MSG_INTANCE_DESTROYED   "Destroyed HttpServer object instance with path to server resources: %s."
 
-#define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT       "Data read from client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT      "Data written to client: <\r\n%s\r\n>"
-#define HTTP_SERVER_MSG_CLIENT_DISCONNECTED         "Client with IP <%s> disconnected."
-#define HTTP_SERVER_MSG_ERROR_WHILE_READING         "ERROR WHILE READING"
-#define HTTP_SERVER_MSG_READ_TMT_EXPIRED            "READ TIMEOUT EXPIRED!"
-#define HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD          "Unknown field: "
-#define HTTP_SERVER_MSG_OPENING_FILE                "Error opening file \"%s\"."
-#define HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE        "UNKNOWN CONTENT TYPE (File extension: %s)"
-#define HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING    "One of the basic request fields (either method, requested resource or protocol) is missing."
+/*************************************/
 
-#define HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED    -1
-#define HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND    -2
-#define HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE       -3
-
-/************************************/
-
-/************************************/
-/********* Private variables ********/
-/************************************/
-
-static std::string path_to_resources;
+/******************************************/
+/******** Class method definitions ********/
+/******************************************/
 
 const std::map<const std::string, const std::string> extension_to_content_type =
 {
@@ -133,53 +112,35 @@ const std::map<const std::string, const std::string> extension_to_content_type =
     {"7z"       ,	"application/x-7z-compressed"                                               },
 };
 
-/************************************/
-
-/************************************/
-/********* Type definitions *********/
-/************************************/
-
-typedef enum
+const std::map<const std::string, const unsigned int> method_to_uint =
 {
-    HTTP_READ_FSM_READ_TRY              = 0 ,
-    HTTP_READ_FSM_CLIENT_DISCONNECTED       ,
-    HTTP_READ_FSM_ADD_TO_READ_DATA          ,
-    HTTP_READ_FSM_READ_END                  ,
-} HTTP_READ_FSM;
+    {"GET"      , HTTP_SERVER_METHOD_CODE_GET    },
+    {"HEAD"     , HTTP_SERVER_METHOD_CODE_HEAD   },
+    {"POST"     , HTTP_SERVER_METHOD_CODE_POST   },
+    {"PUT"      , HTTP_SERVER_METHOD_CODE_PUT    },
+    {"DELETE"   , HTTP_SERVER_METHOD_CODE_DELETE },
+    {"CONNECT"  , HTTP_SERVER_METHOD_CODE_CONNECT},
+    {"OPTIONS"  , HTTP_SERVER_METHOD_CODE_OPTIONS},
+    {"TRACE"    , HTTP_SERVER_METHOD_CODE_TRACE  },
+};
 
-typedef enum
+HttpServer::HttpServer(const std::string path_to_resources):
+    path_to_resources(path_to_resources)                                                    ,
+    ptr_extension_to_content(std::make_shared<ext_to_type_table>(extension_to_content_type)),
+    ptr_method_to_uint(std::make_shared<method_to_uint_table>(method_to_uint))              
 {
-    HTTP_WRITE_FSM_WRITE_TRY        = 0 ,
-    HTTP_WRITE_FSM_WRITE_END            ,
-} HTTP_WRITE_FSM;
-
-typedef enum
-{
-    HTTP_RUN_FSM_READ               = 0 ,
-    HTTP_RUN_FSM_PROCESS_REQUEST        ,
-    HTTP_RUN_FSM_GENERATE_RESPONSE      ,
-    HTTP_RUN_FSM_WRITE                  ,
-    HTTP_RUN_FSM_END_CONNECTION         ,
-} HTTP_RUN_FSM;
-
-/************************************/
-
-bool HttpCheckRequestEnd(std::string& request)
-{
-    // Check first whether or not is the request message long enough.
-    if (request.length() < 4)
-        return false;
-    
-    std::string end = request.substr(request.length() - 4); // Extract last 4 characters
-    
-    return (end == HTTP_SERVER_HTTP_MSG_END);
+    LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
 }
 
-/// @brief Tries to read from HTTP client.
-/// @param client_socket Target client socket.
-/// @param read_from_client String in which data read from client is meant to be stored.
-/// @return false if any error happened or client got disconnected, true otherwise.
-int HttpReadFromClient(int& client_socket, std::string& read_from_client)
+HttpServer::~HttpServer()
+{
+    LOG_INF(HTTP_SERVER_MSG_INTANCE_DESTROYED, this->GetPathToResources().c_str());
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Read data from client
+
+int HttpServer::ReadFromClient(int& client_socket)
 {
     char rx_buffer[HTTP_SERVER_LEN_RX_BUFFER];
     HTTP_READ_FSM http_read_fsm = HTTP_READ_FSM_READ_TRY;
@@ -189,7 +150,7 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
     char client_IP_addr[INET_ADDRSTRLEN] = {};
 
     memset(rx_buffer, 0, sizeof(rx_buffer));
-    read_from_client.clear();
+    this->read_from_client.clear();
     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
 
     while(keep_trying)
@@ -213,10 +174,31 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
                 }
                 else // read_from_socket < 0
                 {
-                    if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
-                        LOG_ERR(HTTP_SERVER_MSG_ERROR_WHILE_READING);
-                    else
-                        LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                    switch(errno)
+                    {
+                        // Firrst, let's fiñter well known errors, such as reset, abort or refusal messages sent by the peer.
+                        case ECONNABORTED:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNABORTED, errno);
+                        break;
+
+                        case ECONNRESET:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNRESET, errno);
+                        break;
+
+                        case ECONNREFUSED:
+                            LOG_WNG(HTTP_SERVER_MSG_ECONNREFUSED, errno);
+                        break;
+
+                        default:
+                        {
+                            // Other errors:
+                            if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
+                                LOG_WNG(HTTP_SERVER_MSG_ERROR_WHILE_READING, errno);
+                            else // Timeout expiral
+                                LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                        }
+                        break;
+                    }
                     
                     keep_connected = -1;
                     http_read_fsm = HTTP_READ_FSM_READ_END;
@@ -226,12 +208,12 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
 
             case HTTP_READ_FSM_ADD_TO_READ_DATA:
             {
-                read_from_client += rx_buffer;
+                this->read_from_client += rx_buffer;
                 memset(rx_buffer, 0, read_from_socket);
 
-                if(HttpCheckRequestEnd(read_from_client))
+                if(this->CheckRequestEnd())
                 {
-                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, read_from_client.data());
+                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else
@@ -253,30 +235,27 @@ int HttpReadFromClient(int& client_socket, std::string& read_from_client)
     return keep_connected;
 }
 
-/// @brief Processes first line of message received from the client.
-/// @param input First line of message received from the client.
-/// @return String vector including method, requested resource and protocol (in that specific order).
-std::vector<std::string> HttpExtractWordsFromReqLine(const std::string& input)
+bool HttpServer::CheckRequestEnd(void)
 {
-    std::vector<std::string> words;
-    std::istringstream iss(input);
-    std::string word;
-
-    while (iss >> word)
-        words.push_back(word);
-
-    return words;
+    // Check first whether or not is the request message long enough.
+    if (this->read_from_client.length() < 4)
+        return false;
+    
+    std::string end = this->read_from_client.substr(this->read_from_client.length() - 4); // Extract last 4 characters
+    
+    return (end == HTTP_SERVER_HTTP_MSG_END);
 }
 
-/// @brief Processes HTTP request message received from the client.
-/// @param read_from_client HTTP request message received from the client.
-/// @param request_fields Map to be filled with fields received within client's HTTP request message.
-/// @return 0 if everything went OK, < 0 if any of the mandatory field in the first request line is empty.
-int HttpProcessRequest(const std::string&read_from_client, std::map<const std::string, std::string>& request_fields)
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Process request
+
+int HttpServer::ProcessRequest(void)
 {
     // Process every line within the request except for the first one (it has already been analysed).
     std::string line;
-    std::istringstream iss(read_from_client);
+    std::istringstream iss(this->read_from_client);
     
     std::getline(iss, line);
     if(!line.empty() && line[line.size() - 1] == '\n')
@@ -284,17 +263,21 @@ int HttpProcessRequest(const std::string&read_from_client, std::map<const std::s
     if(!line.empty() && line[line.size() - 1] == '\r')
         line.erase(line.size() - 1);
 
-    std::vector<std::string> words_from_req_line = HttpExtractWordsFromReqLine(line);
+    // Clean all values found within request_fields map.
+    for(std::pair<const std::string, std::string>& p : this->request_fields)
+        p.second = "";
 
-    LOG_INF("METHOD:    %s", words_from_req_line[0].c_str());
-    LOG_INF("RESOURCE:  %s", words_from_req_line[1].c_str());
-    LOG_INF("PROTOCOL:  %s", words_from_req_line[2].c_str());
+    std::vector<std::string> words_from_req_line = this->ExtractWordsFromReqLine(line);
 
-    request_fields.at("Method")             = words_from_req_line[0];
-    request_fields.at("Requested resource") = words_from_req_line[1];
-    request_fields.at("Protocol")           = words_from_req_line[2];
+    LOG_INF(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
+    LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
+    LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
 
-    if(request_fields.at("Method").empty() || request_fields.at("Requested resource").empty() || request_fields.at("Protocol").empty())
+    this->request_fields.at("Method")             = words_from_req_line[0];
+    this->request_fields.at("Requested resource") = words_from_req_line[1];
+    this->request_fields.at("Protocol")           = words_from_req_line[2];
+
+    if(this->request_fields.at("Method").empty() || this->request_fields.at("Requested resource").empty() || this->request_fields.at("Protocol").empty())
     {
         LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
         return HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED;
@@ -321,19 +304,198 @@ int HttpProcessRequest(const std::string&read_from_client, std::map<const std::s
             value   = line.substr(pos + 2); // After ": "
         }
 
-        if(request_fields.count(key) != 0)
-            request_fields.at(key) = value;
+        if(this->request_fields.count(key) != 0)
+            this->request_fields.at(key) = value;
         else
-            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, value.c_str());
+            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, key.c_str());
     }
 
     return 0;
 }
 
-/// @brief Returns file's extension.
-/// @param text Requested resource name.
-/// @return Empty string if no extension could be found, file extension if everything is okay.
-std::string HttpGetFileExtension(const std::string& text)
+std::vector<std::string> HttpServer::ExtractWordsFromReqLine(const std::string& input)
+{
+    std::vector<std::string> words;
+    std::istringstream iss(input);
+    std::string word;
+
+    while (iss >> word)
+        words.push_back(word);
+
+    return words;
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Generate response for client
+
+long int HttpServer::GenerateResponse(void)
+{
+    std::string content_type ;
+    std::string resource_to_send;
+    long int requested_resource_size;
+    std::string resource_file;
+    bool generating_response = true;
+    HTTP_GEN_RESP_FSM http_gen_resp_fsm = HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD;
+    int gen_resp_error = 0;
+
+    // Clear the response string before starting.
+    this->http_response.clear();
+
+    while(generating_response)
+    {
+        switch(http_gen_resp_fsm)
+        {
+            case HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD:
+            {
+                switch( this->ptr_method_to_uint->at(this->request_fields.at("Method")) )
+                {
+                    case HTTP_SERVER_METHOD_CODE_GET :
+                    case HTTP_SERVER_METHOD_CODE_HEAD:
+                    {
+                        http_gen_resp_fsm = HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE;
+                    }
+                    break;
+
+                    case HTTP_SERVER_METHOD_CODE_TRACE:
+                    {
+                        http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE;
+                    }
+                    break;
+
+                    default:
+                    break;
+                }
+            }
+            break;
+
+            case HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE:
+            {
+                // Get the path to the requested resource.
+                resource_to_send = this->GetPathToRequestedResource();
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION;
+            }
+            break;
+
+            // Check whether or not does the requested resource matches a supported type.
+            case HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION:
+            {
+                try
+                {
+                    // Get file extension of the resource to be sent, then get its proper content type.
+                    content_type = std::string( this->ptr_extension_to_content->at( this->ParseFileExtension(resource_to_send) ) );
+                }
+                catch(const std::out_of_range& e)
+                {
+                    LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
+                    gen_resp_error = HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
+
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+                }
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE;
+            }
+            break;
+
+            // If the resource type is well known by the server, then retrieve its size. Abort if file could not be opened.
+            case HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE:
+            {
+                requested_resource_size = this->GetRequestedResourceSize(resource_to_send);
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER;
+            }
+            break;
+
+            // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
+            case HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER:
+            {
+                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: "        +   content_type                                    + "\r\n" +
+                                        "Content-Length: "      +   std::to_string(requested_resource_size)         + "\r\n" +
+                                        "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
+                                        "\r\n";
+
+                // If request method is GET, then add the resource file as string as well.            
+                if(this->request_fields.at("Method") == "GET")
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE;
+                else
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            // Add response body for GET method requests.
+            case HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE:
+            {
+                int get_resource = this->CopyFileToString(resource_to_send, resource_file);
+                if(get_resource < 0)
+                {
+                    gen_resp_error = get_resource;
+
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+                }
+                
+                this->http_response += resource_file;
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            case HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE:
+            {
+                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: message/http\r\n"
+                                        "\r\n" +
+                                        this->read_from_client;
+                
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            // Return response size.
+            case HTTP_GEN_RESP_FSM_END_GEN_RESP:
+            {
+                generating_response = false;
+            }
+            break;
+
+            default:
+            break;
+        }
+    }
+
+    if(gen_resp_error < 0)
+        return gen_resp_error;
+    
+    return this->http_response.size();
+}
+
+const std::string HttpServer::GetPathToRequestedResource(void)
+{
+    std::string requested_resource_aux = std::string(this->request_fields.at("Requested resource"));
+
+    // If no resource has been specified, then return the index page by default.
+    if(this->request_fields.at("Requested resource") == "" || this->request_fields.at("Requested resource") == "/")
+        requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
+    
+    if(this->FileExists(this->GetPathToResources() + requested_resource_aux))
+        requested_resource_aux =  this->GetPathToResources() + requested_resource_aux;
+    else
+        requested_resource_aux =  this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
+
+    return (const std::string)requested_resource_aux;
+}
+
+const std::string HttpServer::GetPathToResources(void)
+{
+    return this->path_to_resources;
+}
+
+bool HttpServer::FileExists(const std::string& filePath)
+{
+    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
+}
+
+std::string HttpServer::ParseFileExtension(const std::string& text)
 {
     size_t dotPosition = text.find_last_of('.');
     if (dotPosition != std::string::npos && dotPosition < text.length() - 1)
@@ -343,43 +505,22 @@ std::string HttpGetFileExtension(const std::string& text)
     return "";
 }
 
-/// @brief Sets path to directory in which resources are stored.
-/// @param path Path to directory in which resources are stored.
-void HttpSetPathToResources(char* path)
+long int HttpServer::GetRequestedResourceSize(const std::string& resource_to_send)
 {
-    path_to_resources = path;
+    std::ifstream file(resource_to_send, std::ios::binary | std::ios::ate); // Open file in binary mode and move the file pointer to the end
+    
+    if (!file.is_open())
+    {
+        LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, resource_to_send.c_str());
+        return HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND;
+    }
+    
+    std::streampos fileSize = file.tellg(); // Get the position of the file pointer, which is at the end
+    file.close();
+    return fileSize;
 }
 
-/// @brief Gets path to directory in which resources are stored.
-/// @return Path to directory in which resources are stored.
-std::string HttpGetPathToResources(void)
-{
-    return path_to_resources;
-}
-
-/// @brief Checks whether or not does the file exist.
-/// @param filePath File to be checked.
-/// @return True if file exists, false otherwise.
-bool HttpFileExists(const std::string& filePath)
-{
-    return std::filesystem::exists(filePath) && std::filesystem::is_regular_file(filePath);
-}
-
-const std::string HttpGetMIMEDataType(const std::string& content_type)
-{
-    size_t pos = content_type.find('/');
-
-    if (pos != std::string::npos)
-        return content_type.substr(0, pos);
-    else
-        return content_type;
-}
-
-/// @brief Copies requested resource (if found) to string.
-/// @param requested_resource Requested resource path.
-/// @param dest String in which requested resource is meant to be copied.
-/// @return < 0 if file could not be found nor opened, 0 is no error happened.
-int HttpCopyFileToString(const std::string& path_to_requested_resource, std::string& dest)
+int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, std::string& dest)
 {
     std::ifstream file(path_to_requested_resource); // Open the file
 
@@ -393,20 +534,20 @@ int HttpCopyFileToString(const std::string& path_to_requested_resource, std::str
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    const std::string mime_data_type = HttpGetMIMEDataType(extension_to_content_type.at(HttpGetFileExtension(path_to_requested_resource)));
+    const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
 
-    if(mime_data_type == "text")
-    {
-        // Replace '\n' with "\r\n"
-        size_t pos = 0;
-        while ((pos = dest.find('\n', pos)) != std::string::npos)
-        {
-            dest.replace(pos, 1, "\r\n");
+    // if(mime_data_type == "text")
+    // {
+    //     // Replace '\n' with "\r\n"
+    //     size_t pos = 0;
+    //     while ((pos = dest.find('\n', pos)) != std::string::npos)
+    //     {
+    //         dest.replace(pos, 1, "\r\n");
 
-            // Move past the inserted "\r\n"
-            pos += 2;
-        }
-    }
+    //         // Move past the inserted "\r\n"
+    //         pos += 2;
+    //     }
+    // }
 
     // Close the file
     file.close();
@@ -414,63 +555,24 @@ int HttpCopyFileToString(const std::string& path_to_requested_resource, std::str
     return 0;
 }
 
-const std::string HttpCheckResourceToSend(const std::string& requested_resource)
+const std::string HttpServer::GetMIMEDataType(const std::string& content_type)
 {
-    std::string requested_resource_aux = std::string(requested_resource);
+    size_t pos = content_type.find('/');
 
-    // If no resource has been specified, then return the index page by default.
-    if(requested_resource == "" || requested_resource == "/")
-        requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
-    
-    if(HttpFileExists(HttpGetPathToResources() + requested_resource_aux))
-        requested_resource_aux =  HttpGetPathToResources() + requested_resource_aux;
+    if (pos != std::string::npos)
+        return content_type.substr(0, pos);
     else
-        requested_resource_aux =  HttpGetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
-
-    return (const std::string)requested_resource_aux;
+        return content_type;
 }
 
-/// @brief Generates a response based on the requested resource.
-/// @param requested_resource Requested resource path.
-/// @param httpResponse String object in which HTTP response is meant to be stored.
-/// @return HTTP response size in bytes.
-unsigned long int HttpGenerateResponse(const std::string& requested_resource, std::string& httpResponse)
+/////////////////////////////////////////////////////////////////////////////////////////
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Write to client
+
+int HttpServer::WriteToClient(int& client_socket)
 {
-    std::string resource_file;
-    std::string content_type ;
-
-    const std::string resource_to_send = HttpCheckResourceToSend(requested_resource);
-
-    try
-    {
-        content_type = std::string(extension_to_content_type.at(HttpGetFileExtension(resource_to_send)));
-    }
-    catch(const std::out_of_range& e)
-    {
-        LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, HttpGetFileExtension(resource_to_send).c_str());
-        return HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
-    }
-
-    int get_html = HttpCopyFileToString(resource_to_send, resource_file);
-    if(get_html < 0)
-        return get_html;
-
-    httpResponse =  "HTTP/1.1 200 OK\r\n"
-                    "Content-Type: "        +  content_type                         + "\r\n"
-                    "Content-Length: "      +  std::to_string(resource_file.size()) + "\r\n"
-                    "\r\n" +
-                    resource_file;
-
-    return httpResponse.size();
-}
-
-/// @brief Writes response to client.
-/// @param client_socket Client socket.
-/// @param httpResponse HTTP response to be sent.
-/// @return 0 if no error happened, < 0 otherwise (client disconnected or error while writing).
-int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
-{
-    unsigned long remaining_data_len    = httpResponse.size();
+    unsigned long remaining_data_len    = this->http_response.size();
     unsigned long bytes_already_written = 0;
     
     HTTP_WRITE_FSM http_write_fsm = HTTP_WRITE_FSM_WRITE_TRY;
@@ -483,13 +585,13 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
         {
             case HTTP_WRITE_FSM_WRITE_TRY:
             {
-                long int socket_write = ServerSocketWrite(client_socket, httpResponse.data() + bytes_already_written, remaining_data_len);
+                long int socket_write = ServerSocketWrite(client_socket, this->http_response.data() + bytes_already_written, remaining_data_len);
 
                 if((socket_write < 0))
                 {
                     if((errno != EAGAIN && errno != EWOULDBLOCK))
                     {
-                        end_connection = -104;
+                        end_connection = -1;
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                     }
                 }
@@ -499,7 +601,7 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
                     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
                     LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
                     
-                    end_connection = -105;
+                    end_connection = -1;
                     http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                 }
                 else // socket_write > 0
@@ -511,10 +613,12 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
                     // Otherwise, keep writing.
                     if(remaining_data_len == 0)
                     {
-                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, httpResponse.data());
+                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->http_response.data());
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                         end_connection = 0;
                     }
+                    else
+                        LOG_WNG(HTTP_SERVER_MSG_PARTIAL_WRITE, bytes_already_written, remaining_data_len);
                 }
             }
             break;
@@ -533,31 +637,10 @@ int HttpWriteToClient(int& client_socket, const std::string& httpResponse)
     return end_connection;
 }
 
-/// @brief Reads from client, then sends a response.
-/// @param client_socket Client socket.
-/// @return < 0 if any error happened, > 0 if want to interact again, 0 otherwise.
-int HttpServerInteractFn(int client_socket)
+int HttpServer::Run(int& client_socket)
 {
     bool keep_interacting       = true              ;
     HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
-    std::string read_from_client                    ;
-    std::string httpResponse                        ;
-
-    std::map<const std::string, std::string> request_fields =
-    {
-        {"Method"                       , ""},
-        {"Requested resource"           , ""},
-        {"Protocol"                     , ""},
-        {"Host"                         , ""},
-        {"Connection"                   , ""},
-        {"Cache-Control"                , ""},
-        {"Upgrade-Insecure-Requests"    , ""},
-        {"User-Agent"                   , ""},
-        {"Accept"                       , ""},
-        {"Referer"                      , ""},
-        {"Accept-Encoding"              , ""},
-        {"Accept-Language"              , ""},
-    };
 
     while(keep_interacting)
     {
@@ -568,7 +651,7 @@ int HttpServerInteractFn(int client_socket)
             // In that case, exit and wait for an incoming connection to happen again.
             case HTTP_RUN_FSM_READ:
             {
-                int end_connection = HttpReadFromClient(client_socket, read_from_client);
+                int end_connection = this->ReadFromClient(client_socket);
                 
                 if(end_connection < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
@@ -581,20 +664,60 @@ int HttpServerInteractFn(int client_socket)
             // leaving enough space for potential incoming requests.
             case HTTP_RUN_FSM_PROCESS_REQUEST:
             {
-                int process_request = HttpProcessRequest(read_from_client, request_fields);
+                int process_request = this->ProcessRequest();
                 
                 // If request could not be processed properly, then stop interacting with the client.
                 if(process_request < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
                 else
-                    http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
+                {
+                    // Get method code from method string, after having got the method string from the request fields.
+                    switch( this->ptr_method_to_uint->at( this->request_fields.at("Method") ))
+                    {
+                        // NOTE: according to RFC 9110 (HTTP semantics), 
+                        // "All general-purpose servers MUST support the methods GET and HEAD. All other methods are OPTIONAL."
+                        
+                        case HTTP_SERVER_METHOD_CODE_GET    :
+                        case HTTP_SERVER_METHOD_CODE_HEAD   :
+                        case HTTP_SERVER_METHOD_CODE_TRACE  :
+                            http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
+                        break;
+
+                        // case HTTP_SERVER_METHOD_CODE_POST   :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_PUT    :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_DELETE :
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_CONNECT:
+                        
+                        // break;
+
+                        // case HTTP_SERVER_METHOD_CODE_OPTIONS:
+                        
+                        // break;
+
+                        default:
+                        {
+                            LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
+                            http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
+                        }
+                        break;
+                    }
+                }
             }
             break;
 
             // After processing the request, generate a proper response.
             case HTTP_RUN_FSM_GENERATE_RESPONSE:
             {
-                unsigned long int response_size = HttpGenerateResponse(request_fields.at("Requested resource"), httpResponse);
+                long int response_size = this->GenerateResponse();
 
                 // If response could not be generated, exit and wait for an incoming connection to happen again.
                 if(response_size < 0)
@@ -608,7 +731,7 @@ int HttpServerInteractFn(int client_socket)
             // If client got disconnected or any other kind of error happened while trying to wtite, then exit the process.
             case HTTP_RUN_FSM_WRITE:
             {
-                int write_to_client = HttpWriteToClient(client_socket, httpResponse);
+                int write_to_client = this->WriteToClient(client_socket);
 
                 if(write_to_client < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
@@ -630,3 +753,5 @@ int HttpServerInteractFn(int client_socket)
 
     return 0;
 }
+
+/******************************************/
