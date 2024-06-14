@@ -69,6 +69,18 @@ typedef enum
 
 typedef enum
 {
+    HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD          = 0 ,
+    HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE              ,
+    HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION          ,
+    HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE       ,
+    HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER             ,
+    HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE                ,
+    HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE              ,
+    HTTP_GEN_RESP_FSM_END_GEN_RESP                      ,
+} HTTP_GEN_RESP_FSM;
+
+typedef enum
+{
     HTTP_WRITE_FSM_WRITE_TRY        = 0 ,
     HTTP_WRITE_FSM_WRITE_END            ,
 } HTTP_WRITE_FSM;
@@ -114,6 +126,15 @@ private:
         {"Referer"                      , ""},
         {"Accept-Encoding"              , ""},
         {"Accept-Language"              , ""},
+        {"Purpose"                      , ""},
+        {"Sec-Purpose"                  , ""},
+        {"sec-ch-ua"                    , ""},
+        {"sec-ch-ua-mobile"             , ""},
+        {"sec-ch-ua-platform"           , ""},
+        {"Sec-Fetch-Site"               , ""},
+        {"Sec-Fetch-Mode"               , ""},
+        {"Sec-Fetch-User"               , ""},
+        {"Sec-Fetch-Dest"               , ""},
     };
 
     std::string read_from_client;
@@ -121,19 +142,16 @@ private:
 
     // Read data from client
     int ReadFromClient(int& client_socket);
-
     // Used by ReadFromClient
     bool CheckRequestEnd(void);
     
     // Process request
     int ProcessRequest(void);
-
     // Used by ProcessRequest
     std::vector<std::string> ExtractWordsFromReqLine(const std::string& input);
 
     // Generate response for client
-    unsigned long int GenerateResponse();
-
+    long int GenerateResponse(void);
     // Used by GenerateResponse
     const std::string   GetPathToRequestedResource(void)                                                    ;
     const std::string   GetPathToResources(void)                                                            ;
@@ -147,8 +165,8 @@ private:
     int WriteToClient(int& client_socket);
 
 public:
-    HttpServer(const std::string path_to_resources);
-    virtual ~HttpServer(void);
+    HttpServer(const std::string path_to_resources) ;
+    virtual ~HttpServer(void)                       ;
 
     // Copy constructor will not be allowed as undefined/repeated parameters can lead to potential
     // conflicts during runtime.
