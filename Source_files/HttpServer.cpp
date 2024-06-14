@@ -263,6 +263,10 @@ int HttpServer::ProcessRequest(void)
     if(!line.empty() && line[line.size() - 1] == '\r')
         line.erase(line.size() - 1);
 
+    // Clean all values found within request_fields map.
+    for(std::pair<const std::string, std::string>& p : this->request_fields)
+        p.second = "";
+
     std::vector<std::string> words_from_req_line = this->ExtractWordsFromReqLine(line);
 
     LOG_INF(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
@@ -324,50 +328,144 @@ std::vector<std::string> HttpServer::ExtractWordsFromReqLine(const std::string& 
 /////////////////////////////////////////////////////////////////////////////////////////
 // Generate response for client
 
-unsigned long int HttpServer::GenerateResponse(void)
+long int HttpServer::GenerateResponse(void)
 {
-    std::string resource_file;
     std::string content_type ;
+    std::string resource_to_send;
+    long int requested_resource_size;
+    std::string resource_file;
+    bool generating_response = true;
+    HTTP_GEN_RESP_FSM http_gen_resp_fsm = HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD;
+    int gen_resp_error = 0;
 
-    // First, get the path to the requested resource.
-    const std::string resource_to_send = this->GetPathToRequestedResource();
-
-    // Then, check whether or not does the requested resource matches a supported type.
-    try
-    {
-        // Get file extension of the resource to be sent, then get its proper content type.
-        content_type = std::string( this->ptr_extension_to_content->at( this->ParseFileExtension(resource_to_send) ) );
-    }
-    catch(const std::out_of_range& e)
-    {
-        LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
-        return HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
-    }
-
-    // If the resource type is well known by the server, then retrieve its size. Abort if file could not be opened.
-    long int requested_resource_size = this->GetRequestedResourceSize(resource_to_send);
-
-    // Clear the response string.
+    // Clear the response string before starting.
     this->http_response.clear();
 
-    // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
-    this->http_response =   "HTTP/1.1 200 OK\r\n"
-                            "Content-Type: "        +   content_type                                    + "\r\n" +
-                            "Content-Length: "      +   std::to_string(requested_resource_size)         + "\r\n" +
-                            "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
-                            "\r\n";
-    
-    // If request method is GET, then add the resource file as string as well.
-    if(this->request_fields.at("Method") == "GET")
+    while(generating_response)
     {
-        int get_html = this->CopyFileToString(resource_to_send, resource_file);
-        if(get_html < 0)
-            return get_html;
-        
-        this->http_response += resource_file;
+        switch(http_gen_resp_fsm)
+        {
+            case HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD:
+            {
+                switch( this->ptr_method_to_uint->at(this->request_fields.at("Method")) )
+                {
+                    case HTTP_SERVER_METHOD_CODE_GET :
+                    case HTTP_SERVER_METHOD_CODE_HEAD:
+                    {
+                        http_gen_resp_fsm = HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE;
+                    }
+                    break;
+
+                    case HTTP_SERVER_METHOD_CODE_TRACE:
+                    {
+                        http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE;
+                    }
+                    break;
+
+                    default:
+                    break;
+                }
+            }
+            break;
+
+            case HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE:
+            {
+                // Get the path to the requested resource.
+                resource_to_send = this->GetPathToRequestedResource();
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION;
+            }
+            break;
+
+            // Check whether or not does the requested resource matches a supported type.
+            case HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION:
+            {
+                try
+                {
+                    // Get file extension of the resource to be sent, then get its proper content type.
+                    content_type = std::string( this->ptr_extension_to_content->at( this->ParseFileExtension(resource_to_send) ) );
+                }
+                catch(const std::out_of_range& e)
+                {
+                    LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
+                    gen_resp_error = HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
+
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+                }
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE;
+            }
+            break;
+
+            // If the resource type is well known by the server, then retrieve its size. Abort if file could not be opened.
+            case HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE:
+            {
+                requested_resource_size = this->GetRequestedResourceSize(resource_to_send);
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER;
+            }
+            break;
+
+            // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
+            case HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER:
+            {
+                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: "        +   content_type                                    + "\r\n" +
+                                        "Content-Length: "      +   std::to_string(requested_resource_size)         + "\r\n" +
+                                        "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
+                                        "\r\n";
+
+                // If request method is GET, then add the resource file as string as well.            
+                if(this->request_fields.at("Method") == "GET")
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE;
+                else
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            // Add response body for GET method requests.
+            case HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE:
+            {
+                int get_resource = this->CopyFileToString(resource_to_send, resource_file);
+                if(get_resource < 0)
+                {
+                    gen_resp_error = get_resource;
+
+                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+                }
+                
+                this->http_response += resource_file;
+
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            case HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE:
+            {
+                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                                        "Content-Type: message/http\r\n"
+                                        "\r\n" +
+                                        this->read_from_client;
+                
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            // Return response size.
+            case HTTP_GEN_RESP_FSM_END_GEN_RESP:
+            {
+                generating_response = false;
+            }
+            break;
+
+            default:
+            break;
+        }
     }
 
-    // Return response size.
+    if(gen_resp_error < 0)
+        return gen_resp_error;
+    
     return this->http_response.size();
 }
 
@@ -581,6 +679,7 @@ int HttpServer::Run(int& client_socket)
                         
                         case HTTP_SERVER_METHOD_CODE_GET    :
                         case HTTP_SERVER_METHOD_CODE_HEAD   :
+                        case HTTP_SERVER_METHOD_CODE_TRACE  :
                             http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
                         break;
 
@@ -604,10 +703,6 @@ int HttpServer::Run(int& client_socket)
                         
                         // break;
 
-                        // case HTTP_SERVER_METHOD_CODE_TRACE  :
-                        //     http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
-                        // break;
-
                         default:
                         {
                             LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
@@ -622,7 +717,7 @@ int HttpServer::Run(int& client_socket)
             // After processing the request, generate a proper response.
             case HTTP_RUN_FSM_GENERATE_RESPONSE:
             {
-                unsigned long int response_size = this->GenerateResponse();
+                long int response_size = this->GenerateResponse();
 
                 // If response could not be generated, exit and wait for an incoming connection to happen again.
                 if(response_size < 0)
