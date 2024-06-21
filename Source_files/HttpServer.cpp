@@ -338,8 +338,9 @@ long int HttpServer::GenerateResponse(void)
     HTTP_GEN_RESP_FSM http_gen_resp_fsm = HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD;
     int gen_resp_error = 0;
 
-    // Clear the response string before starting.
-    this->http_response.clear();
+    // Clear the response string before starting, as well as request and response fields.
+    this->http_response.clear()             ;
+    this->http_response_status_code.clear() ;
 
     while(generating_response)
     {
@@ -409,7 +410,13 @@ long int HttpServer::GenerateResponse(void)
             // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
             case HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER:
             {
-                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                // if(resource_to_send == (this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE) )
+                if(this->resource_not_found)
+                    this->http_response_status_code = HTTP_SERVER_STATUS_CODE_404;
+                else
+                    this->http_response_status_code = HTTP_SERVER_STATUS_CODE_200;
+
+                this->http_response =   this->request_fields.at("Protocol") + " " + this->http_response_status_code + "\r\n"
                                         "Content-Type: "        +   content_type                                    + "\r\n" +
                                         "Content-Length: "      +   std::to_string(requested_resource_size)         + "\r\n" +
                                         "Connection: "          +   this->request_fields.at("Connection")           + "\r\n" +
@@ -477,10 +484,17 @@ const std::string HttpServer::GetPathToRequestedResource(void)
     if(this->request_fields.at("Requested resource") == "" || this->request_fields.at("Requested resource") == "/")
         requested_resource_aux = HTTP_SERVER_DEFAULT_PAGE;
     
+    // Clear resource_not_found first.
+    this->resource_not_found = false;
+
+    // Then check if the target resource exist.
     if(this->FileExists(this->GetPathToResources() + requested_resource_aux))
-        requested_resource_aux =  this->GetPathToResources() + requested_resource_aux;
+        requested_resource_aux = this->GetPathToResources() + requested_resource_aux;
     else
-        requested_resource_aux =  this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE;
+    {
+        this->resource_not_found    = true;
+        requested_resource_aux      = this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE_PATH;
+    }
 
     return (const std::string)requested_resource_aux;
 }
