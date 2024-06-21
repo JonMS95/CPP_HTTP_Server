@@ -20,7 +20,19 @@
 #define HTTP_SERVER_LEN_TX_BUFFER                   8192        // TX buffer size.
 #define HTTP_SERVER_HTTP_MSG_END                    "\r\n\r\n"
 #define HTTP_SERVER_DEFAULT_PAGE                    "/index.html"
-#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE          "/page_not_found.html"
+#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE_PATH     "/page_not_found.html"
+#define HTTP_SERVER_DEFAULT_ERROR_404_PAGE          "<!DOCTYPE html>\n" \
+                                                    "<html lang=\"en\">\n" \
+                                                    "<head>\n" \
+                                                    "    <meta charset=\"UTF-8\">\n" \
+                                                    "    <title>404 Not Found</title>\n" \
+                                                    "</head>\n" \
+                                                    "<body>\n" \
+                                                    "    <h1>404 - Page Not Found</h1>\n" \
+                                                    "    <p>Sorry, the page you are looking for does not exist.</p>\n" \
+                                                    "    <p><a href=\"/\">Return to Homepage</a></p>\n" \
+                                                    "</body>\n" \
+                                                    "</html>"        
 
 #define HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT       "Data read from client: <\r\n%s\r\n>"
 #define HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT      "Data written to client: <\r\n%s\r\n>"
@@ -52,6 +64,9 @@
 #define HTTP_SERVER_METHOD_CODE_CONNECT 5
 #define HTTP_SERVER_METHOD_CODE_OPTIONS 6
 #define HTTP_SERVER_METHOD_CODE_TRACE   7
+
+#define HTTP_SERVER_STATUS_CODE_200      "200 OK"
+#define HTTP_SERVER_STATUS_CODE_404      "404 Not found"
 
 /************************************/
 
@@ -137,8 +152,11 @@ private:
         {"Sec-Fetch-Dest"               , ""},
     };
 
-    std::string read_from_client;
-    std::string http_response   ;
+    bool resource_not_found;
+
+    std::string read_from_client            ;
+    std::string http_response               ;
+    std::string http_response_status_code   ;
 
     // Read data from client
     int ReadFromClient(int& client_socket);
