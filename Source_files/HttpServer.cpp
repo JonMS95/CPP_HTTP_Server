@@ -56,6 +56,7 @@ const std::map<const std::string, const std::string> extension_to_content_type =
     {"gif"      ,	"image/gif"                                                                 },
     {"htm"      ,	"text/html"                                                                 },
     {"html"     ,	"text/html"                                                                 },
+    {"http"     ,   "message/http"                                                              },
     {"ico"      ,	"image/vnd.microsoft.icon"                                                  },
     {"ics"      ,	"text/calendar"                                                             },
     {"jar"      ,	"application/java-archive"                                                  },
@@ -455,9 +456,10 @@ long int HttpServer::GenerateResponse(void)
             case HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE:
             {
                 this->http_response_status_code = HTTP_SERVER_STATUS_CODE_200;
+                content_type = this->ptr_extension_to_content->at("http");
 
                 this->http_response =   this->request_fields.at("Protocol") + " " + this->http_response_status_code + "\r\n"
-                                        "Content-Type: message/http\r\n"
+                                        "Content-Type: " + content_type + "\r\n"
                                         "\r\n" +
                                         this->read_from_client;
                 
@@ -468,9 +470,10 @@ long int HttpServer::GenerateResponse(void)
             case HTTP_GEN_RESP_FSM_BUILD_SERVER_UNSUPPORTED_METHOD_RESPONSE:
             {
                 this->http_response_status_code = HTTP_SERVER_STATUS_CODE_405;
+                content_type = this->ptr_extension_to_content->at("txt");
 
-                this->http_response =   "HTTP/1.1 405 Method Not Allowed\r\n"
-                                        "Content-Type: text/plain\r\n"
+                this->http_response =   this->request_fields.at("Protocol") + " " + this->http_response_status_code + "\r\n"
+                                        "Content-Type: " + content_type + "\r\n"
                                         "Content-Length: 30\r\n"
                                         "\r\n"
                                         "METHOD NOT SUPPORTED BY SERVER";
