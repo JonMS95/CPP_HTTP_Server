@@ -110,6 +110,7 @@ const std::map<const std::string, const std::string> extension_to_content_type =
     {"3gp"      ,	"video/3gpp"                                                                },
     {"3g2"      ,	"video/3gpp2"                                                               },
     {"7z"       ,	"application/x-7z-compressed"                                               },
+    {"default"  ,   "application/octet-stream"                                                  },
 };
 
 const std::map<const std::string, const unsigned int> method_to_uint =
@@ -388,10 +389,9 @@ long int HttpServer::GenerateResponse(void)
                 }
                 catch(const std::out_of_range& e)
                 {
-                    LOG_ERR(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
-                    gen_resp_error = HTTP_SERVER_ERR_UNKOWN_RQST_DATA_TYPE;
-
-                    http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+                    LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
+                    
+                    content_type = std::string( this->ptr_extension_to_content->at("default"));
                 }
 
                 http_gen_resp_fsm = HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE;
@@ -410,7 +410,6 @@ long int HttpServer::GenerateResponse(void)
             // Fill the response message string with data. If request method is equal to HEAD, then just build the header.
             case HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER:
             {
-                // if(resource_to_send == (this->GetPathToResources() + HTTP_SERVER_DEFAULT_ERROR_404_PAGE) )
                 if(this->resource_not_found)
                     this->http_response_status_code = HTTP_SERVER_STATUS_CODE_404;
                 else
@@ -548,8 +547,7 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
 
-    const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
-
+    // const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
     // if(mime_data_type == "text")
     // {
     //     // Replace '\n' with "\r\n"
