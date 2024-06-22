@@ -50,7 +50,7 @@
 #define HTTP_SERVER_MSG_RQST_PROTOCOL               "PROTOCOL:  %s"
 #define HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING    "One of the basic request fields (either method, requested resource or protocol) is missing."
 #define HTTP_SERVER_MSG_PARTIAL_WRITE               "Partial write detected. Already written: %d. Remaining bytes amount: %d."
-#define HTTP_SERVER_MSG_UNSUPPORTED_METHOD          "Unsupported method received: %s. Closing connection."
+#define HTTP_SERVER_MSG_UNSUPPORTED_METHOD          "%s method is unsupported by the server."
 
 #define HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED    -1
 #define HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND    -2
@@ -64,8 +64,9 @@
 #define HTTP_SERVER_METHOD_CODE_OPTIONS 6
 #define HTTP_SERVER_METHOD_CODE_TRACE   7
 
-#define HTTP_SERVER_STATUS_CODE_200      "200 OK"
-#define HTTP_SERVER_STATUS_CODE_404      "404 Not found"
+#define HTTP_SERVER_STATUS_CODE_200     "200 OK"
+#define HTTP_SERVER_STATUS_CODE_404     "404 Not found"
+#define HTTP_SERVER_STATUS_CODE_405     "405 Method Not Allowed"
 
 /************************************/
 
@@ -83,14 +84,15 @@ typedef enum
 
 typedef enum
 {
-    HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD          = 0 ,
-    HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE              ,
-    HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION          ,
-    HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE       ,
-    HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER             ,
-    HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE                ,
-    HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE              ,
-    HTTP_GEN_RESP_FSM_END_GEN_RESP                      ,
+    HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD                  = 0 ,
+    HTTP_GEN_RESP_FSM_GET_PATH_TO_RESOURCE                      ,
+    HTTP_GEN_RESP_FSM_CHECK_RESOURCE_EXTENSION                  ,
+    HTTP_GEN_RESP_FSM_GET_REQUESTED_RESOURCE_SIZE               ,
+    HTTP_GEN_RESP_FSM_BUILD_RESPONSE_HEADER                     ,
+    HTTP_GEN_RESP_FSM_BUILD_ADD_RESOURCE                        ,
+    HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE                      ,
+    HTTP_GEN_RESP_FSM_BUILD_SERVER_UNSUPPORTED_METHOD_RESPONSE  ,
+    HTTP_GEN_RESP_FSM_END_GEN_RESP                              ,
 } HTTP_GEN_RESP_FSM;
 
 typedef enum
