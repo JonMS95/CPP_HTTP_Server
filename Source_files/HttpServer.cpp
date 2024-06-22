@@ -349,6 +349,8 @@ long int HttpServer::GenerateResponse(void)
         {
             case HTTP_GEN_RESP_FSM_CHECK_REQUEST_METHOD:
             {
+                // NOTE: according to RFC 9110 (HTTP semantics), 
+                // "All general-purpose servers MUST support the methods GET and HEAD. All other methods are OPTIONAL."
                 switch( this->ptr_method_to_uint->at(this->request_fields.at("Method")) )
                 {
                     case HTTP_SERVER_METHOD_CODE_GET :
@@ -365,6 +367,10 @@ long int HttpServer::GenerateResponse(void)
                     break;
 
                     default:
+                    {
+                        LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
+                        http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_SERVER_UNSUPPORTED_METHOD_RESPONSE;
+                    }
                     break;
                 }
             }
@@ -390,7 +396,7 @@ long int HttpServer::GenerateResponse(void)
                 catch(const std::out_of_range& e)
                 {
                     LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
-                    
+
                     content_type = std::string( this->ptr_extension_to_content->at("default"));
                 }
 
@@ -448,11 +454,27 @@ long int HttpServer::GenerateResponse(void)
 
             case HTTP_GEN_RESP_FSM_BUILD_TRACE_RESPONSE:
             {
-                this->http_response =   "HTTP/1.1 200 OK\r\n"
+                this->http_response_status_code = HTTP_SERVER_STATUS_CODE_200;
+
+                this->http_response =   this->request_fields.at("Protocol") + " " + this->http_response_status_code + "\r\n"
                                         "Content-Type: message/http\r\n"
                                         "\r\n" +
                                         this->read_from_client;
                 
+                http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
+            }
+            break;
+
+            case HTTP_GEN_RESP_FSM_BUILD_SERVER_UNSUPPORTED_METHOD_RESPONSE:
+            {
+                this->http_response_status_code = HTTP_SERVER_STATUS_CODE_405;
+
+                this->http_response =   "HTTP/1.1 405 Method Not Allowed\r\n"
+                                        "Content-Type: text/plain\r\n"
+                                        "Content-Length: 30\r\n"
+                                        "\r\n"
+                                        "METHOD NOT SUPPORTED BY SERVER";
+
                 http_gen_resp_fsm = HTTP_GEN_RESP_FSM_END_GEN_RESP;
             }
             break;
@@ -682,47 +704,7 @@ int HttpServer::Run(int& client_socket)
                 if(process_request < 0)
                     http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
                 else
-                {
-                    // Get method code from method string, after having got the method string from the request fields.
-                    switch( this->ptr_method_to_uint->at( this->request_fields.at("Method") ))
-                    {
-                        // NOTE: according to RFC 9110 (HTTP semantics), 
-                        // "All general-purpose servers MUST support the methods GET and HEAD. All other methods are OPTIONAL."
-                        
-                        case HTTP_SERVER_METHOD_CODE_GET    :
-                        case HTTP_SERVER_METHOD_CODE_HEAD   :
-                        case HTTP_SERVER_METHOD_CODE_TRACE  :
-                            http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
-                        break;
-
-                        // case HTTP_SERVER_METHOD_CODE_POST   :
-                        
-                        // break;
-
-                        // case HTTP_SERVER_METHOD_CODE_PUT    :
-                        
-                        // break;
-
-                        // case HTTP_SERVER_METHOD_CODE_DELETE :
-                        
-                        // break;
-
-                        // case HTTP_SERVER_METHOD_CODE_CONNECT:
-                        
-                        // break;
-
-                        // case HTTP_SERVER_METHOD_CODE_OPTIONS:
-                        
-                        // break;
-
-                        default:
-                        {
-                            LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
-                            http_run_fsm = HTTP_RUN_FSM_END_CONNECTION;
-                        }
-                        break;
-                    }
-                }
+                    http_run_fsm = HTTP_RUN_FSM_GENERATE_RESPONSE;
             }
             break;
 
