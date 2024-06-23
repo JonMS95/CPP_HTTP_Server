@@ -20,6 +20,7 @@
             <Dependency_files>
                 <Dynamic_libraries/>
                 <Header_files/>
+                <Data/>
             </Dependency_files>
             <Executable_files/>
         </Tests>
@@ -29,7 +30,7 @@
     <Common_shell_files
         version_major="1"
         version_minor="1"
-        version_mode="RELEASE"
+        version_mode="DEBUG"
         local_path="~/Desktop/scripts/C/C_Common_shell_files"
         URL="https://github.com/JonMS95/C_Common_shell_files"
     />
@@ -92,6 +93,10 @@
             <Crypto
                 local_path="/usr/lib/x86_64-linux-gnu/libcrypto.so"
                 type="built-in"
+            />
+            <HTML_tutorial
+                local_path="~/Desktop/scripts/HTML/HTML_tutorial"
+                type="data"
             />
         </Dependencies>
     </Tests>
