@@ -64,6 +64,8 @@
 
 /********* Certificate and private key path *********/
 
+// Certificate as well as private keys should not be stored within dependency files directory
+// (as it may lead to malicious activity if any execution permission is accepted).
 /************ Server certificate ************/
 
 #define CERT_OPT_CHAR                       'c'
@@ -85,7 +87,7 @@
 #define RESOURCES_OPT_CHAR                  'e'
 #define RESOURCES_OPT_LONG                  "Resources"
 #define RESOURCES_OPT_DETAIL                "Path to web resources"
-#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Sample_webpage"
+#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Dependency_files/Data/HTML_tutorial"
 
 /***************************************/
 
