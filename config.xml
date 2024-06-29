@@ -29,7 +29,7 @@
     <!-- Common shell files location -->
     <Common_shell_files
         version_major="1"
-        version_minor="1"
+        version_minor="2"
         version_mode="DEBUG"
         local_path="~/Desktop/scripts/C/C_Common_shell_files"
         URL="https://github.com/JonMS95/C_Common_shell_files"
