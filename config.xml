@@ -97,6 +97,7 @@
             <HTML_tutorial
                 local_path="~/Desktop/scripts/HTML/HTML_tutorial"
                 type="data"
+                URL="https://github.com/JonMS95/HTML_tutorial"
             />
         </Dependencies>
     </Tests>
