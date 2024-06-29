@@ -55,6 +55,22 @@
 #define RX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
 #define RX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
 
+/********** Send timeout (s) ******/
+#define TX_TIMEOUT_SECS_CHAR                'y'
+#define TX_TIMEOUT_SECS_OPT_LONG            "TXTimeoutSecs"
+#define TX_TIMEOUT_SECS_OPT_DETAIL          "Send Timeout in seconds."
+#define TX_TIMEOUT_SECS_MIN_VALUE           0
+#define TX_TIMEOUT_SECS_MAX_VALUE           3600    // 1 hour
+#define TX_TIMEOUT_SECS_DEFAULT_VALUE       600     // 10 minutes
+
+/********** Send timeout (us) *****/
+#define TX_TIMEOUT_USECS_CHAR               'i'
+#define TX_TIMEOUT_USECS_OPT_LONG           "TXTimeoutUsecs"
+#define TX_TIMEOUT_USECS_OPT_DETAIL         "Send Timeout in microseconds."
+#define TX_TIMEOUT_USECS_MIN_VALUE          0
+#define TX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
+#define TX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
+
 /********* Secure connection *********/
 
 #define SECURE_CONN_CHAR                    's'
@@ -104,6 +120,8 @@ int main(int argc, char** argv)
     bool concurrency_enabled;
     int rx_timeout_s        ;
     int rx_timeout_us       ;
+    int tx_timeout          ;
+    int tx_timeout_us       ;
     bool secure_connection  ;
     char* path_cert = (char*)calloc(1024, 1);
     char* path_pkey = (char*)calloc(1024, 1);
@@ -146,6 +164,22 @@ int main(int argc, char** argv)
                                 RX_TIMEOUT_USECS_MAX_VALUE      ,
                                 RX_TIMEOUT_USECS_DEFAULT_VALUE  ,
                                 &rx_timeout_us                  );
+
+    SetOptionDefinitionInt(     TX_TIMEOUT_SECS_CHAR            ,
+                                TX_TIMEOUT_SECS_OPT_LONG        ,
+                                TX_TIMEOUT_SECS_OPT_DETAIL      ,
+                                TX_TIMEOUT_SECS_MIN_VALUE       ,
+                                TX_TIMEOUT_SECS_MAX_VALUE       ,
+                                TX_TIMEOUT_SECS_DEFAULT_VALUE   ,
+                                &tx_timeout                     );
+
+    SetOptionDefinitionInt(     TX_TIMEOUT_USECS_CHAR           ,
+                                TX_TIMEOUT_USECS_OPT_LONG       ,
+                                TX_TIMEOUT_USECS_OPT_DETAIL     ,
+                                TX_TIMEOUT_USECS_MIN_VALUE      ,
+                                TX_TIMEOUT_USECS_MAX_VALUE      ,
+                                TX_TIMEOUT_USECS_DEFAULT_VALUE  ,
+                                &tx_timeout_us                  );
 
     SetOptionDefinitionBool(    SECURE_CONN_CHAR                ,
                                 SECURE_CONN_LONG                ,
@@ -190,6 +224,8 @@ int main(int argc, char** argv)
                     true                    ,
                     rx_timeout_s            ,
                     rx_timeout_us           ,
+                    tx_timeout              ,
+                    tx_timeout_us           ,
                     secure_connection       ,
                     path_cert               ,
                     path_pkey               ,
