@@ -53,7 +53,7 @@
 #define RX_TIMEOUT_USECS_OPT_DETAIL         "Receive Timeout in microseconds."
 #define RX_TIMEOUT_USECS_MIN_VALUE          0
 #define RX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
-#define RX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
+#define RX_TIMEOUT_USECS_DEFAULT_VALUE      0
 
 /********** Send timeout (s) ******/
 #define TX_TIMEOUT_SECS_CHAR                'y'
@@ -69,7 +69,7 @@
 #define TX_TIMEOUT_USECS_OPT_DETAIL         "Send Timeout in microseconds."
 #define TX_TIMEOUT_USECS_MIN_VALUE          0
 #define TX_TIMEOUT_USECS_MAX_VALUE          1000000 // 1 second
-#define TX_TIMEOUT_USECS_DEFAULT_VALUE      0       // 1 microsecond
+#define TX_TIMEOUT_USECS_DEFAULT_VALUE      0
 
 /********* Secure connection *********/
 
