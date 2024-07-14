@@ -1,4 +1,4 @@
-# CPP_HTTP_Server: an HTTP(S) server written in C++ 💻
+# CPP_HTTP_Server: an HTTP(S) server written in C++ 🌐
 This project aims to learn about HTTP protocol and build an HTTP(S) server, so it has been created for both educational and practical purposes.
 Although it is still in its early stages, it can already be used to serve simple websites.
 
