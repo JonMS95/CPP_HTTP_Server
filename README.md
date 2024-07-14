@@ -1,6 +1,6 @@
 # CPP_HTTP_Server: an HTTP(S) server written in C++ 💻
-The aim of this project is to learn about HTTP protocol and build an HTTP(S) server, so it has been created for both educational and practical purposes.
-
+This project aims to learn about HTTP protocol and build an HTTP(S) server, so it has been created for both educational and practical purposes.
+Although it is still in its early stages, it can already be used to serve simple websites.
 
 ## Table of contents 🗂️
 * [**Introduction** 📑](#introduction)
@@ -35,7 +35,7 @@ Building this project has involved a deep understanding of:
 
 and the list goes on and on.
 
-As the project still is on its first stages, many things are yet to be improved, and some methods still need to be added (like PUT, POST and DELETE among others).
+As the project still is in its first stages, many things are yet to be improved, and some methods still need to be added (like PUT, POST and DELETE among others).
 
 
 ## Features <a id="features"></a> 🌟
@@ -55,7 +55,7 @@ In order to get some knowledge about how to use the library alongside its option
 
 
 ## Prerequisites <a id="prerequisites"></a> 🧱
-By now, the application has only been tested in POSIX-compliant Linux distros. In these, many of the dependencies dependencies below may already come installed in the SO.
+By now, the application has only been tested in POSIX-compliant Linux distros. In these, many of the dependencies below may already come installed in the OS.
 In the following list, the minimum versions required (if any) by the library are listed.
 
 | Dependency                   | Purpose                                 | Minimum version |
@@ -77,7 +77,7 @@ In the following list, the minimum versions required (if any) by the library are
 Except for Make, Bash and OpenSSL, the latest version of each of the remaining dependencies will be installed automatically if they have not been found beforehand. 
 
 On top of the ones listed above, there are some *JMS* dependencies (libraries that were also made by myself) that are required for both the library and the test executable to be built,
-(although these are managed by the library itself, so no need to download them manually). The required version for each of them is specified by the [config.xml](config.xml) file.
+(although these are managed by the library itself, so there is no need to download them manually). The required version for each of them is specified by the [config.xml](config.xml) file.
 
 | Dependency                                                              | Purpose                                  |
 | :---------------------------------------------------------------------- | :--------------------------------------- |
@@ -105,7 +105,7 @@ cd /path/to/repos/C_Server_Socket
 find . -type f -exec chmod u+x {} +
 ```
 
-3. For the library to be built (i.e., clean, download dependencies and compile), just type the following on your command:
+3. For the library to be built (i.e., clean, download dependencies and compile), just type the following:
 
 ```bash
 make
@@ -151,7 +151,7 @@ Again, the one below is the path to the generated executable file:
 ## Usage <a id="usage"></a> 🖱️
 The following is the main server socket function prototype as found in the **_header API file_** (_/path/to/repos/CPP_HTTP_Server/API/vM_m/Header_files/ServerSocket_api.h_) or in the [repo file](Source_files/ServerSocket_api.h).
 
-A couple of functions defined as static methods of the HttpInteract class have to be used to setup and run the server. First, the path to the webpage resources should be provided:
+A couple of functions defined as static methods of the HttpInteract class have to be used to set up and run the server. First, the path to the webpage resources should be provided:
 
 ```c
 static void SetPathToResources(const char* path_to_resources);
@@ -187,7 +187,7 @@ ServerSocketRun(server_port             ,
 Where each parameter used has been previously defined.
 
 For reference, a proper API usage example has been provided on the [test source file](Tests/Source_files/main.c).
-As this one uses [**C_Arg_Parse library**](https://github.com/JonMS95/C_Arg_Parse), input parameters can be provided by using command-line interface.
+As this one uses [**C_Arg_Parse library**](https://github.com/JonMS95/C_Arg_Parse), input parameters can be provided by using a command-line interface.
 An example of CLI usage is provided in the [**Shell_files/test.sh**](Shell_files/test.sh) file.
 
 
