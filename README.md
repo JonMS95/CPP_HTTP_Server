@@ -76,6 +76,9 @@ In the following list, the minimum versions required (if any) by the library are
 
 Except for Make, Bash and OpenSSL, the latest version of each of the remaining dependencies will be installed automatically if they have not been found beforehand. 
 
+In any case, installing **_Xmlstarlet_** before executing any of the commands below is strongly recommended. Otherwise, it can lead to error since make file
+contains some calls to it at the top. If that happens, just repeat the process (Xmlstarlet would have been already installed).
+
 On top of the ones listed above, there are some *JMS* dependencies (libraries that were also made by myself) that are required for both the library and the test executable to be built,
 (although these are managed by the library itself, so there is no need to download them manually). The required version for each of them is specified by the [config.xml](config.xml) file.
 
