@@ -100,6 +100,8 @@ cd /path/to/repos
 git clone https://github.com/JonMS95/C_Server_Socket
 ```
 
+**Note**: by default, the path to the repository should be found within a directory (found in Desktop) called "scripts" (it's to say, **_~/Desktop/scripts_**). In order to modify this, change the paths specified in [config.xml](config.xml). If dependencies are not found in the specified path, the path itself would be created, then dependencies will be compiled there. 
+
 2. Then navigate to the directory in which the repo has been downloaded, and set execution permissions to every file just in case they have not been sent beforehand.
 
 ```bash
