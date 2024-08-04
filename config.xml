@@ -30,7 +30,7 @@
     <Common_shell_files
         version_major="1"
         version_minor="2"
-        version_mode="DEBUG"
+        version_mode="RELEASE"
         local_path="~/Desktop/scripts/C/C_Common_shell_files"
         URL="https://github.com/JonMS95/C_Common_shell_files"
     />
@@ -40,7 +40,7 @@
     <Dependencies Dest="Dependency_files">
         <C_Severity_Log
             version_major="1"
-            version_minor="2"
+            version_minor="3"
             version_mode="RELEASE"
             local_path="~/Desktop/scripts/C/C_Severity_Log"
             URL="https://github.com/JonMS95/C_Severity_Log"
@@ -48,7 +48,7 @@
         <C_Server_Socket
             version_major="1"
             version_minor="3"
-            version_mode="DEBUG"
+            version_mode="RELEASE"
             local_path="~/Desktop/scripts/C/C_Server_Socket"
             URL="https://github.com/JonMS95/C_Server_Socket"
         />
@@ -60,7 +60,7 @@
         <Dependencies Dest="Tests/Dependency_files">
             <C_Severity_Log
                 version_major="1"
-                version_minor="2"
+                version_minor="3"
                 version_mode="RELEASE"
                 local_path="~/Desktop/scripts/C/C_Severity_Log"
                 URL="https://github.com/JonMS95/C_Severity_Log"
@@ -68,14 +68,14 @@
             <C_Arg_Parse
                 version_major="1"
                 version_minor="4"
-                version_mode="DEBUG"
+                version_mode="RELEASE"
                 local_path="~/Desktop/scripts/C/C_Arg_Parse"
                 URL="https://github.com/JonMS95/C_Arg_Parse"
             />
             <C_Server_Socket
                 version_major="1"
                 version_minor="3"
-                version_mode="DEBUG"
+                version_mode="RELEASE"
                 local_path="~/Desktop/scripts/C/C_Server_Socket"
                 URL="https://github.com/JonMS95/C_Server_Socket"
             />
