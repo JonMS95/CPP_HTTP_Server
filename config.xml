@@ -83,7 +83,7 @@
                 version_major="1"
                 version_minor="0"
                 version_mode="DEBUG"
-                local_path="~/Desktop/scripts/C++/CPP_HTTP_Server"
+                local_path="."
                 URL="https://github.com/JonMS95/CPP_HTTP_Server"
             />
             <SSL
