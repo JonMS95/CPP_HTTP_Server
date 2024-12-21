@@ -128,7 +128,7 @@ Where **_M_** and **_m_** stand for the major and minor version numbers.
 **_HttpServer_api.h_** could also be found in **_/path/to/repos/CPP_HTTP_Server/Source_files/HttpServer_api.h_** although it may differ depending on the version.
 
 ### Create certificate and private key <a id="create-certificate-and-private-key"></a> 🔐
-In order to provide security (HTTP**S** instead of simply HTTP), the applcation layer should run over TLS. To create a proper certificate as well as a private key,
+In order to provide security (HTTP**S** instead of simply HTTP), the application layer should run over TLS. To create a proper certificate as well as a private key,
 just follow the rules described in the [C_Server_Socket README document](https://github.com/JonMS95/C_Server_Socket?tab=readme-ov-file#create-certificate-and-private-key).
 
 
@@ -154,7 +154,7 @@ Again, the one below is the path to the generated executable file:
 
 
 ## Usage <a id="usage"></a> 🖱️
-The following is the main server socket function prototype as found in the **_header API file_** (_/path/to/repos/CPP_HTTP_Server/API/vM_m/Header_files/ServerSocket_api.h_) or in the [repo file](Source_files/ServerSocket_api.h).
+The following are the server function prototypes as found in the **_header API file_** (_/path/to/repos/CPP_HTTP_Server/API/vM_m/Header_files/HttpServer_api.hpp_) or in the [repo file](Source_files/HttpServer_api.hpp).
 
 A couple of functions defined as static methods of the HttpInteract class have to be used to set up and run the server. First, the path to the webpage resources should be provided:
 
