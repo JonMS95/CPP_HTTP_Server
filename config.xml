@@ -11,25 +11,25 @@
     />
     <!-- Directory structure -->
     <Directories>
-        <Dynamic_libraries/>
-        <Dependency_files>
-            <Header_files/>
-            <Dynamic_libraries/>
-        </Dependency_files>
-        <Tests>
-            <Dependency_files>
-                <Dynamic_libraries/>
-                <Header_files/>
-                <Data/>
-            </Dependency_files>
-            <Executable_files/>
-        </Tests>
+        <lib/>
+        <deps>
+            <inc/>
+            <lib/>
+        </deps>
+        <test>
+            <deps>
+                <lib/>
+                <inc/>
+                <data/>
+            </deps>
+            <exe/>
+        </test>
     </Directories>
     
     <!-- Common shell files location -->
     <Common_shell_files
         version_major="1"
-        version_minor="3"
+        version_minor="5"
         version_mode="DEBUG"
         local_path="~/Desktop/scripts/C/C_Common_shell_files"
         URL="https://github.com/JonMS95/C_Common_shell_files"
@@ -37,48 +37,27 @@
 
     <!-- API -->
     <!-- Dependencies -->
-    <Dependencies Dest="Dependency_files">
+    <deps Dest="deps">
         <C_Severity_Log
-            version_major="1"
+            version_major="2"
             version_minor="3"
             version_mode="RELEASE"
-            local_path="~/Desktop/scripts/C/C_Severity_Log"
             URL="https://github.com/JonMS95/C_Severity_Log"
+            local_path="~/C_Severity_Log"
         />
         <C_Server_Socket
-            version_major="1"
-            version_minor="3"
+            version_major="2"
+            version_minor="1"
             version_mode="RELEASE"
-            local_path="~/Desktop/scripts/C/C_Server_Socket"
+            local_path="~/C_Server_Socket"
             URL="https://github.com/JonMS95/C_Server_Socket"
         />
-    </Dependencies>
+    </deps>
 
     <!-- Tests -->
     <!-- Paths to dependency files for the testing executable. -->
-    <Tests>
-        <Dependencies Dest="Tests/Dependency_files">
-            <C_Severity_Log
-                version_major="1"
-                version_minor="3"
-                version_mode="RELEASE"
-                local_path="~/Desktop/scripts/C/C_Severity_Log"
-                URL="https://github.com/JonMS95/C_Severity_Log"
-            />
-            <C_Arg_Parse
-                version_major="1"
-                version_minor="4"
-                version_mode="RELEASE"
-                local_path="~/Desktop/scripts/C/C_Arg_Parse"
-                URL="https://github.com/JonMS95/C_Arg_Parse"
-            />
-            <C_Server_Socket
-                version_major="1"
-                version_minor="3"
-                version_mode="RELEASE"
-                local_path="~/Desktop/scripts/C/C_Server_Socket"
-                URL="https://github.com/JonMS95/C_Server_Socket"
-            />
+    <test>
+        <deps Dest="test/deps" Sorted="Yes">
             <CPP_HTTP_Server
                 version_major="1"
                 version_minor="0"
@@ -86,19 +65,61 @@
                 local_path="."
                 URL="https://github.com/JonMS95/CPP_HTTP_Server"
             />
-            <SSL
-                local_path="/usr/lib/x86_64-linux-gnu/libssl.so"
-                type="built-in"
+            <C_Server_Socket
+                version_major="2"
+                version_minor="1"
+                version_mode="RELEASE"
+                local_path="~/C_Server_Socket"
+                URL="https://github.com/JonMS95/C_Server_Socket"
             />
-            <Crypto
-                local_path="/usr/lib/x86_64-linux-gnu/libcrypto.so"
-                type="built-in"
+            <C_Arg_Parse
+                version_major="2"
+                version_minor="1"
+                version_mode="RELEASE"
+                local_path="~/C_Arg_Parse"
+                URL="https://github.com/JonMS95/C_Arg_Parse"
+            />
+            <C_Severity_Log
+                version_major="2"
+                version_minor="3"
+                version_mode="RELEASE"
+                local_path="~/C_Severity_Log"
+                URL="https://github.com/JonMS95/C_Severity_Log"
+            />
+            <C_Signal_Handler
+                version_major="1"
+                version_minor="0"
+                version_mode="RELEASE"
+                local_path="~/C_Signal_Handler"
+                URL="https://github.com/JonMS95/C_Signal_Handler"
+            />
+            <C_Mutex_Guard
+                version_major="1"
+                version_minor="1"
+                version_mode="RELEASE"
+                local_path="~/C_Mutex_Guard"
+                URL="https://github.com/JonMS95/C_Mutex_Guard"
             />
             <HTML_tutorial
                 local_path="~/Desktop/scripts/HTML/HTML_tutorial"
                 type="data"
                 URL="https://github.com/JonMS95/HTML_tutorial"
             />
-        </Dependencies>
-    </Tests>
+            <OpenSSL
+                type="APT_package"
+                lib_name="ssl"
+                package="libssl-dev"
+            />
+            <Crypto
+                type="APT_package"
+                lib_name="crypto"
+                package="libssl-dev"
+            />
+            <Posix_Threads
+                type="APT_package"
+                lib_name="pthread"
+                package="libc6-dev"
+            />
+        </deps>
+    </test>
 </config>
