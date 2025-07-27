@@ -3,7 +3,7 @@
 CONFIG_FILE	:= config.xml
 
 # Common shell files data
-SH_FILES_LOCAL_NAME 			:= Common_shell_files
+SH_FILES_LOCAL_NAME 			:= csf
 SH_FILES_NODE 					:= config/Common_shell_files/
 SH_FILES_PATH 					:= $(shell xmlstarlet sel -t -v "$(SH_FILES_NODE)@local_path" $(CONFIG_FILE))
 SH_FILES_VERSION_MAJOR 			:= $(shell xmlstarlet sel -t -v "$(SH_FILES_NODE)@version_major" $(CONFIG_FILE))
@@ -29,16 +29,23 @@ LIBRARY_LANG	:= $(shell xmlstarlet sel -t -v "$(PRJ_DATA_NODE)@language" $(CONFI
 LIBRARY_NAME 	:= $(shell xmlstarlet sel -t -v "$(PRJ_DATA_NODE)@library_name" $(CONFIG_FILE))
 SO_FILE_NAME 	:= lib$(LIBRARY_NAME).so.$(VERSION_MAJOR).$(VERSION_MINOR)
 
+# APT package dependencies data
+APT_PKG_DEPS_PREFIX_REGEX:='s/\([^ ]*\)/-l\1/g'
+APT_PKG_DEPS_XML_SENTENCE:=xmlstarlet sel -t -m '/config/deps/*[@type="APT_package"]' -v '@lib_name' -n $(CONFIG_FILE)
+TEST_APT_PKG_DEPS_XML_SENTENCE:=xmlstarlet sel -t -m '/config/test/deps/*[@type="APT_package"]' -v '@lib_name' -n $(CONFIG_FILE)
+APT_PKG_DEPS_LINK:=$(shell echo $(shell $(APT_PKG_DEPS_XML_SENTENCE)) | grep -v '^$$' | sed $(APT_PKG_DEPS_PREFIX_REGEX))
+TEST_APT_PKG_DEPS_LINK:=$(shell echo $(shell $(TEST_APT_PKG_DEPS_XML_SENTENCE) | grep -v '^$$' | sed $(APT_PKG_DEPS_PREFIX_REGEX)))
+
 # Shell files
 SHELL_DIRS			:= $(SH_FILES_LOCAL_NAME)/directories.sh
 SHELL_SYM_LINKS		:= $(SH_FILES_LOCAL_NAME)/sym_links.sh
 SHELL_GEN_VERSIONS 	:= $(SH_FILES_LOCAL_NAME)/gen_version.sh
 
-LOCAL_SHELL_TEST	:= Shell_files/test.sh
+LOCAL_SHELL_TEST	:= sh/test.sh
 
 # Debug flags
 ifeq ("$(VERSION_MODE)", "DEBUG")
-	DEBUG_INFO := -g -Wall
+	DEBUG_INFO := -g -Wall -fsanitize=address
 else
 	DEBUG_INFO :=
 endif
@@ -60,25 +67,28 @@ endif
 BASIC_SYSTEM_DEPS := $(COMP) xmlstarlet git
 
 # Dependencies directories
-HEADER_DEPS_DIR			:= Dependency_files/Header_files
-SO_DEPS_DIR				:= Dependency_files/Dynamic_libraries
+HEADER_DEPS_DIR			:= deps/inc
+SO_DEPS_DIR				:= deps/lib
 
-TEST_HEADER_DEPS_DIR	:= Tests/$(HEADER_DEPS_DIR)
-TEST_SO_DEPS_DIR		:= Tests/$(SO_DEPS_DIR)
+TEST_HEADER_DEPS_DIR	:= test/$(HEADER_DEPS_DIR)
+TEST_SO_DEPS_DIR		:= test/$(SO_DEPS_DIR)
 #############################################################################################################################################################
 
 #################################################
 # Library variables
-LIB_SOURCES		:= Source_files/*
-LIB_SO			:= Dynamic_libraries/$(SO_FILE_NAME)
+LIB_SOURCES		:= src/*
+LIB_SO			:= lib/$(SO_FILE_NAME)
 
-TEST_SRC_MAIN	:= Tests/Source_files/*
-TEST_EXE_MAIN	:= Tests/Executable_files/main
+TEST_SRC_MAIN	:= test/src/*
+TEST_EXE_MAIN	:= test/exe/main
 
-D_TEST_DEPS		:= config/Tests/Dependencies/
+D_TEST_DEPS		:= config/test/deps/
 #################################################
 
 #################################################################################
+# Declare Compound rules as phony (only the suitable ones):
+.PHONY: check_basic_deps check_sh_deps
+
 # Compound rules
 exe: clean check_basic_deps check_sh_deps ln_sh_files directories deps so_lib api
 
@@ -86,6 +96,9 @@ test: clean_test directories test_deps test_main test_exe
 #################################################################################
 
 ##########################################################################
+# Declare Basic rules as phony (only the suitable ones):
+.PHONY: check_basic_deps check_sh_deps
+
 # Basic dependencies
 check_basic_deps:
 	@for i in $(BASIC_SYSTEM_DEPS); do								 \
@@ -115,12 +128,12 @@ check_sh_deps:
 			cd $(SH_FILES_PATH) 									;\
 																	 \
 			if [ ! -d API ]; then 									 \
-				./Source_files/directories.sh 						;\
+				./src/directories.sh 						;\
 			fi 														;\
 																	 \
 			git pull 												;\
 			git checkout "tags/$(SH_FILES_VERSION)" 				;\
-			./Source_files/gen_CSF_version.sh 						;\
+			./src/gen_CSF_version.sh 						;\
 			git checkout main 										;\
 	 		git pull 												;\
 		fi 															;\
@@ -139,7 +152,7 @@ check_sh_deps:
 		git clone $(SH_FILES_URL) 									;\
 		cd $(SH_FILES_PATH) 										;\
 		git checkout "tags/$(SH_FILES_VERSION)" 					;\
-		./Source_files/gen_CSF_version.sh 							;\
+		./src/gen_CSF_version.sh 							;\
 		git checkout main 											;\
 	 	git pull 													;\
 																	 \
@@ -148,9 +161,12 @@ check_sh_deps:
 ##########################################################################
 
 #############################################################################
+# Declare Exe rules as phony (only the suitable ones):
+.PHONY: clean ln_sh_files directories deps api clean_api
+
 # Exe Rules
 clean:
-	rm -rf $(SH_FILES_LOCAL_NAME) Object_files Dynamic_libraries Dependency_files
+	rm -rf $(SH_FILES_LOCAL_NAME) obj lib deps
 
 ln_sh_files:
 	ln -sf $(SH_FILES_DEP_PATH) $(SH_FILES_LOCAL_NAME)
@@ -171,19 +187,22 @@ api:
 
 # Use this one carefully. Non-tagged versions will be impossible to recover if used.
 clean_api:
-	rm -rf API
+	sudo rm -rf API
 #############################################################################
 
 ##########################################################################################################################
+# Declare Test rules as phony (only the suitable ones):
+.PHONY: clean_test test_deps test_exe
+
 # Test Rules
 clean_test:
-	rm -rf Tests/Dependency_files Tests/Object_files Tests/Executable_files
+	rm -rf test/deps test/obj test/exe
 
 test_deps:
 	@bash $(SHELL_SYM_LINKS) -d $(D_TEST_DEPS)
 
 $(TEST_EXE_MAIN): $(TEST_SRC_MAIN) $(wildcard $(TEST_SO_DEPS_DIR)/*.so) $(wildcard $(TEST_HEADER_DEPS_DIR)/*.h)
-	$(COMP) $(FLAGS) -I$(TEST_HEADER_DEPS_DIR) $(TEST_SRC_MAIN) -L$(TEST_SO_DEPS_DIR) $(addprefix -l,$(patsubst lib%.so,%,$(shell ls $(TEST_SO_DEPS_DIR)))) -o $(TEST_EXE_MAIN)
+	$(COMP) $(FLAGS) -I$(TEST_HEADER_DEPS_DIR) $(TEST_SRC_MAIN) -L$(TEST_SO_DEPS_DIR) $(addprefix -l,$(patsubst lib%.so,%,$(shell ls $(TEST_SO_DEPS_DIR) | sort -V))) $(TEST_APT_PKG_DEPS_LINK) -o $(TEST_EXE_MAIN)
 
 test_main: $(TEST_EXE_MAIN)
 
