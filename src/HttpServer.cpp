@@ -131,12 +131,12 @@ HttpServer::HttpServer(const std::string path_to_resources):
     ptr_extension_to_content(std::make_shared<ext_to_type_table>(extension_to_content_type)),
     ptr_method_to_uint(std::make_shared<method_to_uint_table>(method_to_uint))              
 {
-    LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
+    SVRTY_LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
 }
 
 HttpServer::~HttpServer()
 {
-    LOG_INF(HTTP_SERVER_MSG_INTANCE_DESTROYED, this->GetPathToResources().c_str());
+    SVRTY_LOG_INF(HTTP_SERVER_MSG_INTANCE_DESTROYED, this->GetPathToResources().c_str());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -165,7 +165,7 @@ int HttpServer::ReadFromClient(int& client_socket)
 
                 if(read_from_socket == 0)
                 {
-                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+                    SVRTY_LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
                     keep_connected = -1;
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
@@ -180,24 +180,24 @@ int HttpServer::ReadFromClient(int& client_socket)
                     {
                         // Firrst, let's fiñter well known errors, such as reset, abort or refusal messages sent by the peer.
                         case ECONNABORTED:
-                            LOG_WNG(HTTP_SERVER_MSG_ECONNABORTED, errno);
+                            SVRTY_LOG_WNG(HTTP_SERVER_MSG_ECONNABORTED, errno);
                         break;
 
                         case ECONNRESET:
-                            LOG_WNG(HTTP_SERVER_MSG_ECONNRESET, errno);
+                            SVRTY_LOG_WNG(HTTP_SERVER_MSG_ECONNRESET, errno);
                         break;
 
                         case ECONNREFUSED:
-                            LOG_WNG(HTTP_SERVER_MSG_ECONNREFUSED, errno);
+                            SVRTY_LOG_WNG(HTTP_SERVER_MSG_ECONNREFUSED, errno);
                         break;
 
                         default:
                         {
                             // Other errors:
                             if(errno != EAGAIN && errno != EWOULDBLOCK && errno != 0)
-                                LOG_WNG(HTTP_SERVER_MSG_ERROR_WHILE_READING, errno);
+                                SVRTY_LOG_WNG(HTTP_SERVER_MSG_ERROR_WHILE_READING, errno);
                             else // Timeout expiral
-                                LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
+                                SVRTY_LOG_WNG(HTTP_SERVER_MSG_READ_TMT_EXPIRED);
                         }
                         break;
                     }
@@ -215,7 +215,7 @@ int HttpServer::ReadFromClient(int& client_socket)
 
                 if(this->CheckRequestEnd())
                 {
-                    LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
+                    SVRTY_LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else
@@ -271,9 +271,9 @@ int HttpServer::ProcessRequest(void)
 
     std::vector<std::string> words_from_req_line = this->ExtractWordsFromReqLine(line);
 
-    LOG_INF(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
-    LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
-    LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
+    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
+    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
+    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
 
     this->request_fields.at("Method")             = words_from_req_line[0];
     this->request_fields.at("Requested resource") = words_from_req_line[1];
@@ -281,7 +281,7 @@ int HttpServer::ProcessRequest(void)
 
     if(this->request_fields.at("Method").empty() || this->request_fields.at("Requested resource").empty() || this->request_fields.at("Protocol").empty())
     {
-        LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
+        SVRTY_LOG_ERR(HTTP_SERVER_MSG_BASIC_RQST_FIELD_MISSING);
         return HTTP_SERVER_ERR_BASIC_RQST_FIELDS_FAILED;
     }
 
@@ -309,7 +309,7 @@ int HttpServer::ProcessRequest(void)
         if(this->request_fields.count(key) != 0)
             this->request_fields.at(key) = value;
         else
-            LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, key.c_str());
+            SVRTY_LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_RQST_FIELD, key.c_str());
     }
 
     return 0;
@@ -369,7 +369,7 @@ long int HttpServer::GenerateResponse(void)
 
                     default:
                     {
-                        LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
+                        SVRTY_LOG_WNG(HTTP_SERVER_MSG_UNSUPPORTED_METHOD, this->request_fields.at("Method").c_str());
                         http_gen_resp_fsm = HTTP_GEN_RESP_FSM_BUILD_SERVER_UNSUPPORTED_METHOD_RESPONSE;
                     }
                     break;
@@ -396,7 +396,7 @@ long int HttpServer::GenerateResponse(void)
                 }
                 catch(const std::out_of_range& e)
                 {
-                    LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
+                    SVRTY_LOG_WNG(HTTP_SERVER_MSG_UNKNOWN_CONTENT_TYPE, this->ParseFileExtension(resource_to_send).c_str());
 
                     content_type = std::string( this->ptr_extension_to_content->at("default"));
                 }
@@ -549,7 +549,7 @@ long int HttpServer::GetRequestedResourceSize(const std::string& resource_to_sen
     
     if (!file.is_open())
     {
-        LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, resource_to_send.c_str());
+        SVRTY_LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, resource_to_send.c_str());
         return HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND;
     }
     
@@ -565,7 +565,7 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
     // If not even the 404 error page could be found, then an error sould be returned.
     if (!file.is_open())
     {
-        LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, path_to_requested_resource.c_str());
+        SVRTY_LOG_ERR(HTTP_SERVER_MSG_OPENING_FILE, path_to_requested_resource.c_str());
         return HTTP_SERVER_ERR_REQUESTED_FILE_NOT_FOUND;
     }
 
@@ -636,7 +636,7 @@ int HttpServer::WriteToClient(int& client_socket)
                 {
                     char client_IP_addr[INET_ADDRSTRLEN] = {};
                     ServerSocketGetClientIPv4(client_socket, client_IP_addr);
-                    LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
+                    SVRTY_LOG_WNG(HTTP_SERVER_MSG_CLIENT_DISCONNECTED, client_IP_addr);
                     
                     end_connection = -1;
                     http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
@@ -650,12 +650,12 @@ int HttpServer::WriteToClient(int& client_socket)
                     // Otherwise, keep writing.
                     if(remaining_data_len == 0)
                     {
-                        LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->http_response.data());
+                        SVRTY_LOG_DBG(HTTP_SERVER_MSG_DATA_WRITTEN_TO_CLIENT, this->http_response.data());
                         http_write_fsm = HTTP_WRITE_FSM_WRITE_END;
                         end_connection = 0;
                     }
                     else
-                        LOG_WNG(HTTP_SERVER_MSG_PARTIAL_WRITE, bytes_already_written, remaining_data_len);
+                        SVRTY_LOG_WNG(HTTP_SERVER_MSG_PARTIAL_WRITE, bytes_already_written, remaining_data_len);
                 }
             }
             break;
