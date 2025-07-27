@@ -14,6 +14,9 @@
 /********** Private constants **********/
 /***************************************/
 
+#define TEST_HTTP_SERVER_LOG_BUFFER_SIZE    10000
+#define TEST_HTTP_SERVER_INIT_MASK          0xFF
+
 /************ Port settings ************/
 
 #define PORT_OPT_CHAR                       'r'
@@ -112,7 +115,7 @@
 */
 int main(int argc, char** argv)
 {
-    SetSeverityLogMask(SVRTY_LOG_MASK_ALL);
+    SeverityLogInitWithMask(TEST_HTTP_SERVER_LOG_BUFFER_SIZE, TEST_HTTP_SERVER_INIT_MASK);
     SetSeverityLogPrintTimeStatus(true);
 
     int server_port         ;
@@ -208,11 +211,11 @@ int main(int argc, char** argv)
     int parse_arguments = ParseOptions(argc, argv);
     if(parse_arguments < 0)
     {
-        LOG_ERR("Arguments parsing failed!");
+        SVRTY_LOG_ERR("Arguments parsing failed!");
         return parse_arguments;
     }
 
-    LOG_INF("Arguments successfully parsed!");
+    SVRTY_LOG_INF("Arguments successfully parsed!");
 
     HttpInteract::SetPathToResources(path_to_resources);
 
