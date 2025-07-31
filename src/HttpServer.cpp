@@ -14,7 +14,7 @@
 #include <vector>
 #include <sstream>
 #include <filesystem>
-#include <map>
+#include <unordered_map>
 
 /*************************************/
 
@@ -31,7 +31,7 @@
 /******** Class method definitions ********/
 /******************************************/
 
-const std::map<const std::string, const std::string> extension_to_content_type =
+const std::unordered_map<const std::string, const std::string> extension_to_content_type =
 {
     {"aac"      ,	"audio/aac"                                                                 },
     {"abw"      ,	"application/x-abiword"                                                     },
@@ -114,7 +114,7 @@ const std::map<const std::string, const std::string> extension_to_content_type =
     {"default"  ,   "application/octet-stream"                                                  },
 };
 
-const std::map<const std::string, const unsigned int> method_to_uint =
+const std::unordered_map<const std::string, const unsigned int> method_to_uint =
 {
     {"GET"      , HTTP_SERVER_METHOD_CODE_GET    },
     {"HEAD"     , HTTP_SERVER_METHOD_CODE_HEAD   },
@@ -571,20 +571,6 @@ int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, 
 
     // Read the file content into an std::string
     dest.assign((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
-    // const std::string mime_data_type = this->GetMIMEDataType(this->ptr_extension_to_content->at(this->ParseFileExtension(path_to_requested_resource)));
-    // if(mime_data_type == "text")
-    // {
-    //     // Replace '\n' with "\r\n"
-    //     size_t pos = 0;
-    //     while ((pos = dest.find('\n', pos)) != std::string::npos)
-    //     {
-    //         dest.replace(pos, 1, "\r\n");
-
-    //         // Move past the inserted "\r\n"
-    //         pos += 2;
-    //     }
-    // }
 
     // Close the file
     file.close();
