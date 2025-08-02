@@ -15,7 +15,7 @@
 /***************************************/
 
 #define TEST_HTTP_SERVER_LOG_BUFFER_SIZE    10000
-#define TEST_HTTP_SERVER_INIT_MASK          0xFF
+#define TEST_HTTP_SERVER_INIT_MASK          ( (SVRTY_LOG_MASK_EIW << 4) | 0x0F )
 
 /************ Port settings ************/
 
