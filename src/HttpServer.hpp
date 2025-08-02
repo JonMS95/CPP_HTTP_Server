@@ -9,6 +9,7 @@
 #include <vector>
 #include <map>
 #include <memory>
+#include <MutexGuard_api.h>
 
 /*************************************/
 
@@ -126,6 +127,7 @@ private:
 
     const std::shared_ptr<ext_to_type_table> ptr_extension_to_content   ;
     const std::shared_ptr<method_to_uint_table> ptr_method_to_uint      ;
+    const std::shared_ptr<MTX_GRD> ptr_to_resources_read_mutex          ;
 
     std::map<const std::string, std::string> request_fields =
     {
@@ -158,6 +160,9 @@ private:
     std::string read_from_client            ;
     std::string http_response               ;
     std::string http_response_status_code   ;
+
+    // Check resource sharing mutex status
+    void InitResourcesMutex(void);
 
     // Read data from client
     int ReadFromClient(int& client_socket);
