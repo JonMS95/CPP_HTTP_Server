@@ -106,7 +106,7 @@
 #define RESOURCES_OPT_CHAR                  'e'
 #define RESOURCES_OPT_LONG                  "Resources"
 #define RESOURCES_OPT_DETAIL                "Path to web resources"
-#define RESOURCES_DEFAULT_VALUE             "~/Desktop/scripts/C++/CPP_HTTP_Server/Tests/Dependency_files/Data/HTML_tutorial"
+#define RESOURCES_DEFAULT_VALUE             "~/CPP_HTTP_Server/Tests/Dependency_files/Data/HTML_tutorial"
 
 /***************************************/
 
