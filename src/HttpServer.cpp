@@ -245,7 +245,7 @@ int HttpServer::ReadFromClient(int& client_socket)
 
                 if(this->CheckRequestEnd())
                 {
-                    SVRTY_LOG_INF(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
+                    SVRTY_LOG_DBG(HTTP_SERVER_MSG_DATA_READ_FROM_CLIENT, this->read_from_client.data());
                     http_read_fsm = HTTP_READ_FSM_READ_END;
                 }
                 else
@@ -301,9 +301,9 @@ int HttpServer::ProcessRequest(void)
 
     std::vector<std::string> words_from_req_line = this->ExtractWordsFromReqLine(line);
 
-    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
-    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
-    SVRTY_LOG_INF(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
+    SVRTY_LOG_DBG(HTTP_SERVER_MSG_RQST_METHOD     , words_from_req_line[0].c_str());
+    SVRTY_LOG_DBG(HTTP_SERVER_MSG_RQST_RESOURCE   , words_from_req_line[1].c_str());
+    SVRTY_LOG_DBG(HTTP_SERVER_MSG_RQST_PROTOCOL   , words_from_req_line[2].c_str());
 
     this->request_fields.at("Method")             = words_from_req_line[0];
     this->request_fields.at("Requested resource") = words_from_req_line[1];
