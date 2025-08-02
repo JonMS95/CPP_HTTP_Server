@@ -52,6 +52,13 @@
             local_path="~/C_Server_Socket"
             URL="https://github.com/JonMS95/C_Server_Socket"
         />
+        <C_Mutex_Guard
+                version_major="1"
+                version_minor="1"
+                version_mode="RELEASE"
+                local_path="~/C_Mutex_Guard"
+                URL="https://github.com/JonMS95/C_Mutex_Guard"
+            />
     </deps>
 
     <!-- Tests -->
