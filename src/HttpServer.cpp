@@ -8,13 +8,14 @@
 #include "HttpServer.hpp"
 #include "SeverityLog_api.h"
 #include "ServerSocket_api.h"
+#include "MutexGuard_api.h"
 
 #include <string>
 #include <fstream>          // Read from file to string
 #include <vector>
 #include <sstream>
 #include <filesystem>
-#include <unordered_map>
+#include <map>
 
 /*************************************/
 
@@ -28,10 +29,17 @@
 /*************************************/
 
 /******************************************/
-/******** Class method definitions ********/
+/****** Private variable definitions ******/
 /******************************************/
 
-const std::unordered_map<const std::string, const std::string> extension_to_content_type =
+bool is_rsc_read_mtx_init = false;
+
+MTX_GRD resources_read_mutex =
+{
+    .additional_data = (void*)&is_rsc_read_mtx_init
+};
+
+const std::map<const std::string, const std::string> extension_to_content_type =
 {
     {"aac"      ,	"audio/aac"                                                                 },
     {"abw"      ,	"application/x-abiword"                                                     },
@@ -114,7 +122,7 @@ const std::unordered_map<const std::string, const std::string> extension_to_cont
     {"default"  ,   "application/octet-stream"                                                  },
 };
 
-const std::unordered_map<const std::string, const unsigned int> method_to_uint =
+const std::map<const std::string, const unsigned int> method_to_uint =
 {
     {"GET"      , HTTP_SERVER_METHOD_CODE_GET    },
     {"HEAD"     , HTTP_SERVER_METHOD_CODE_HEAD   },
@@ -126,10 +134,17 @@ const std::unordered_map<const std::string, const unsigned int> method_to_uint =
     {"TRACE"    , HTTP_SERVER_METHOD_CODE_TRACE  },
 };
 
+/******************************************/
+
+/******************************************/
+/******** Class method definitions ********/
+/******************************************/
+
 HttpServer::HttpServer(const std::string path_to_resources):
     path_to_resources(path_to_resources)                                                    ,
     ptr_extension_to_content(std::make_shared<ext_to_type_table>(extension_to_content_type)),
-    ptr_method_to_uint(std::make_shared<method_to_uint_table>(method_to_uint))              
+    ptr_method_to_uint(std::make_shared<method_to_uint_table>(method_to_uint))              ,
+    ptr_to_resources_read_mutex(std::make_shared<MTX_GRD>(resources_read_mutex))
 {
     SVRTY_LOG_INF(HTTP_SERVER_MSG_INTANCE_CREATED, this->GetPathToResources().c_str());
 }
@@ -137,6 +152,21 @@ HttpServer::HttpServer(const std::string path_to_resources):
 HttpServer::~HttpServer()
 {
     SVRTY_LOG_INF(HTTP_SERVER_MSG_INTANCE_DESTROYED, this->GetPathToResources().c_str());
+}
+
+/////////////////////////////////////////////////////////////////////////////////////////
+// Check shared resources mutex status
+
+void HttpServer::InitResourcesMutex(void)
+{
+    bool is_mutex_init = *((bool*)(this->ptr_to_resources_read_mutex->additional_data));
+    
+    if(is_mutex_init)
+        return;
+
+    *((bool*)(this->ptr_to_resources_read_mutex->additional_data)) = true;
+    
+    MTX_GRD_INIT(this->ptr_to_resources_read_mutex.get());
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -560,6 +590,8 @@ long int HttpServer::GetRequestedResourceSize(const std::string& resource_to_sen
 
 int HttpServer::CopyFileToString(const std::string& path_to_requested_resource, std::string& dest)
 {
+    MTX_GRD_LOCK_SC(this->ptr_to_resources_read_mutex.get(), read_2_file_mtx_ptr);
+
     std::ifstream file(path_to_requested_resource); // Open the file
 
     // If not even the 404 error page could be found, then an error sould be returned.
@@ -664,6 +696,8 @@ int HttpServer::Run(int& client_socket)
 {
     bool keep_interacting       = true              ;
     HTTP_RUN_FSM http_run_fsm   = HTTP_RUN_FSM_READ ;
+
+    InitResourcesMutex();
 
     while(keep_interacting)
     {
